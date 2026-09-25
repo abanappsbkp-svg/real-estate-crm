@@ -28,7 +28,7 @@ python-jose[cryptography]==3.3.0  # JWT
 passlib[bcrypt]==1.7.4  # Password hashing
 cryptography==41.0.7
 python-dotenv==1.0.0
-
+python-email-validator==2.0.0
 # ============================================================================
 # Caching & Session Management
 # ============================================================================

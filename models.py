@@ -134,7 +134,7 @@ class User(Base):
     phone = Column(String(20))
     role = Column(String(20), default=UserRole.VIEWER.value, nullable=False)
     avatar_url = Column(String)
-    preferred_language = Column(String(5), default="en", ForeignKey("languages.code"))
+    preferred_language = Column(String(5), ForeignKey("languages.code"), default="en")
     is_active = Column(Boolean, default=True)
     last_login = Column(DateTime)
     email_verified = Column(Boolean, default=False)

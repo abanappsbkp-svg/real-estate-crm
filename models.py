@@ -449,7 +449,7 @@ class Deal(Base):
     # Relationships
     organization = relationship("Organization", back_populates="deals")
     client = relationship("Client", back_populates="deals")
-    property = relationship("Property", back_populates="deals")
+    listing = relationship("Property", back_populates="deals")
     agent = relationship("User", back_populates="deals")
     stage_history = relationship("DealStageHistory", back_populates="deal", cascade="all, delete-orphan")
     

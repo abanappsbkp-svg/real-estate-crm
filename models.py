@@ -10,7 +10,7 @@ from enum import Enum
 import uuid
 
 from sqlalchemy import (
-    Column, String, Integer, Float, DateTime, Boolean, TIMESTAMP,
+    Column, String, Integer, Float, DateTime, Boolean, TIMESTAMP, Date,
     ForeignKey, ARRAY, JSON, LargeBinary, Numeric, Text, Index,
     UniqueConstraint, CheckConstraint, ForeignKeyConstraint,
     func, and_, or_
@@ -277,7 +277,7 @@ class Client(Base):
     email = Column(String(255))
     phone_primary = Column(String(20))
     phone_secondary = Column(String(20))
-    date_of_birth = Column(date)
+    date_of_birth = Column(Date)
     
     # Lead info
     source = Column(String(50), nullable=False)

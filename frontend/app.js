@@ -1553,7 +1553,19 @@
         <tbody>${rows}</tbody></table></div></div>
       <div class="card" style="margin-top:16px"><div class="card-body"><h3>${esc(t("users.rolesTitle"))}</h3>
         <ul><li>${esc(t("users.roleViewer"))}</li><li>${esc(t("users.roleAgent"))}</li><li>${esc(t("users.roleAdmin"))}</li></ul>
-        <p class="muted small">${esc(t("users.orgId"))}: <code>${esc(state.user.organization_id)}</code></p></div></div>`);
+        <p class="muted small">${esc(t("users.orgId"))}: <code>${esc(state.user.organization_id)}</code></p></div></div>
+      <div class="card" style="margin-top:16px"><div class="card-body"><h3>${esc(t("demo.title"))}</h3>
+        <p class="muted">${esc(t("demo.help"))}</p>
+        <div class="actions"><button class="btn btn-primary" data-demo="add">${esc(t("demo.add"))}</button>
+        <button class="btn btn-danger" data-demo="remove">${esc(t("demo.remove"))}</button></div></div></div>`);
+    $$("[data-demo]", c).forEach((b) => b.addEventListener("click", () => {
+      const adding = b.dataset.demo === "add";
+      confirmDialog(t(adding ? "demo.confirmAdd" : "demo.confirmRemove"), async () => {
+        await api("/admin/demo-data", { method: adding ? "POST" : "DELETE" });
+        state.cache = {};
+        toast(t(adding ? "demo.added" : "demo.removed"), "success");
+      }, t(adding ? "demo.add" : "demo.remove"));
+    }));
     $$("[data-role]", c).forEach((s) => s.addEventListener("change", async () => {
       try {
         await api(`/auth/admin/users/${s.dataset.role}/role`, { method: "PATCH", body: { role: s.value } });

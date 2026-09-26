@@ -696,6 +696,7 @@ def create_app() -> FastAPI:
         ("routers_deals", "Deals"),
         ("routers_calls", "Call Logging"),
         ("routers_documents", "Document Management"),
+        ("routers_demo", "Demo data"),
     ]:
         try:
             module = importlib.import_module(module_name)

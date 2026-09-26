@@ -68,7 +68,31 @@ def sync_schema(Base) -> None:
     so an existing database matches models.py. Safe to run on every startup:
     it never drops tables, columns or data.
     """
-    from sqlalchemy import inspect, text
+    from sqlalchemy import inspect, text, String
+
+    # A database built from the old schema.sql has strict ENUM columns (e.g. no
+    # "pending" status, no "lead" stage), two unused reporting views and a trigger
+    # that fails on every status change. Convert/remove them so the app works.
+    with engine.begin() as conn:
+        conn.execute(text("DROP VIEW IF EXISTS agent_performance"))
+        conn.execute(text("DROP VIEW IF EXISTS pipeline_forecast"))
+        has_properties = conn.execute(text("SELECT to_regclass('public.properties') IS NOT NULL")).scalar()
+        if has_properties:
+            conn.execute(text("DROP TRIGGER IF EXISTS property_status_changed ON properties"))
+        enum_columns = conn.execute(text(
+            "SELECT table_name, column_name FROM information_schema.columns "
+            "WHERE table_schema = 'public' AND data_type = 'USER-DEFINED' AND udt_name IN "
+            "('user_role', 'property_status', 'deal_stage', 'lead_source', 'call_type')"
+        )).fetchall()
+        for table_name, column_name in enum_columns:
+            table = Base.metadata.tables.get(table_name)
+            column = table.columns.get(column_name) if table is not None else None
+            if column is None or not isinstance(column.type, String):
+                continue
+            conn.execute(text(f'ALTER TABLE "{table_name}" ALTER COLUMN "{column_name}" DROP DEFAULT'))
+            conn.execute(text(
+                f'ALTER TABLE "{table_name}" ALTER COLUMN "{column_name}" TYPE VARCHAR(50) USING "{column_name}"::text'
+            ))
 
     Base.metadata.create_all(bind=engine)
 

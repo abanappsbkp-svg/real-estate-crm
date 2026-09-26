@@ -119,6 +119,7 @@ window.I18N = {
     "perm.view": "Can view", "perm.comment": "Can comment", "perm.edit": "Can edit",
     "retention.compliance": "Compliance", "retention.regulatory": "Regulatory", "retention.archive": "Archive",
     "role.viewer": "Viewer", "role.agent": "Agent", "role.admin": "Admin",
+    "demo.title": "Demo data", "demo.help": "Fill the CRM with about 100 sample records (properties, clients, deals, calls) to try things out. Remove them with one click before you start using it for real — your real data is never touched.", "demo.add": "Load demo data", "demo.remove": "Remove demo data", "demo.confirmAdd": "Add about 100 sample records to your CRM?", "demo.confirmRemove": "Remove all demo records? Your real data stays.", "demo.added": "Demo data added", "demo.removed": "Demo data removed",
   },
 
   // ===========================================================================
@@ -240,6 +241,7 @@ window.I18N = {
     "perm.view": "فقط مشاهده", "perm.comment": "امکان نظر دادن", "perm.edit": "امکان ویرایش",
     "retention.compliance": "انطباق", "retention.regulatory": "الزامات قانونی", "retention.archive": "بایگانی",
     "role.viewer": "بیننده", "role.agent": "مشاور", "role.admin": "مدیر",
+    "demo.title": "داده‌های نمونه", "demo.help": "برای آزمایش، حدود ۱۰۰ رکورد نمونه (ملک، مشتری، معامله، تماس) به CRM اضافه کنید. قبل از استفاده واقعی با یک کلیک حذفشان کنید — داده‌های واقعی شما دست نمی‌خورد.", "demo.add": "افزودن داده‌های نمونه", "demo.remove": "حذف داده‌های نمونه", "demo.confirmAdd": "حدود ۱۰۰ رکورد نمونه به CRM اضافه شود؟", "demo.confirmRemove": "همه رکوردهای نمونه حذف شوند؟ داده‌های واقعی شما باقی می‌ماند.", "demo.added": "داده‌های نمونه اضافه شد", "demo.removed": "داده‌های نمونه حذف شد",
   },
 
   // ===========================================================================
@@ -361,6 +363,7 @@ window.I18N = {
     "perm.view": "Կարող է դիտել", "perm.comment": "Կարող է մեկնաբանել", "perm.edit": "Կարող է խմբագրել",
     "retention.compliance": "Համապատասխանություն", "retention.regulatory": "Օրենսդրական", "retention.archive": "Արխիվ",
     "role.viewer": "Դիտորդ", "role.agent": "Գործակալ", "role.admin": "Ադմինիստրատոր",
+    "demo.title": "Փորձնական տվյալներ", "demo.help": "Լրացրեք CRM-ը մոտ 100 փորձնական գրառումով (գույքեր, հաճախորդներ, գործարքներ, զանգեր)՝ փորձարկելու համար։ Իրական աշխատանքից առաջ դրանք հեռացրեք մեկ սեղմումով․ ձեր իրական տվյալները չեն փոխվի։", "demo.add": "Բեռնել փորձնական տվյալներ", "demo.remove": "Հեռացնել փորձնական տվյալները", "demo.confirmAdd": "Ավելացնե՞լ մոտ 100 փորձնական գրառում։", "demo.confirmRemove": "Հեռացնե՞լ բոլոր փորձնական գրառումները։ Իրական տվյալները կմնան։", "demo.added": "Փորձնական տվյալներն ավելացված են", "demo.removed": "Փորձնական տվյալները հեռացված են",
   },
 
   // ===========================================================================
@@ -482,5 +485,6 @@ window.I18N = {
     "perm.view": "Просмотр", "perm.comment": "Комментирование", "perm.edit": "Редактирование",
     "retention.compliance": "Соответствие требованиям", "retention.regulatory": "Требования закона", "retention.archive": "Архив",
     "role.viewer": "Наблюдатель", "role.agent": "Агент", "role.admin": "Администратор",
+    "demo.title": "Демо-данные", "demo.help": "Заполните CRM примерно 100 тестовыми записями (объекты, клиенты, сделки, звонки), чтобы всё попробовать. Перед реальной работой удалите их одним нажатием — ваши настоящие данные не пострадают.", "demo.add": "Загрузить демо-данные", "demo.remove": "Удалить демо-данные", "demo.confirmAdd": "Добавить около 100 тестовых записей?", "demo.confirmRemove": "Удалить все демо-записи? Настоящие данные останутся.", "demo.added": "Демо-данные добавлены", "demo.removed": "Демо-данные удалены",
   },
 };

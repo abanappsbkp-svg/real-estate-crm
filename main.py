@@ -704,6 +704,28 @@ def create_app() -> FastAPI:
         except Exception as e:  # catch everything, not only ImportError
             logger.error(f"❌ {label} routes failed to load: {e!r}", exc_info=True)
 
+    # ========================================================================
+    # Website (front-end) served from the frontend/ folder
+    # ========================================================================
+    import os
+    from fastapi.staticfiles import StaticFiles
+    from fastapi.responses import FileResponse
+
+    frontend_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "frontend")
+    if os.path.isdir(frontend_dir):
+        app.mount("/assets", StaticFiles(directory=frontend_dir), name="assets")
+
+        @app.get("/", include_in_schema=False)
+        async def website():
+            return FileResponse(
+                os.path.join(frontend_dir, "index.html"),
+                headers={"Cache-Control": "no-cache"},
+            )
+
+        logger.info("✅ Website loaded")
+    else:
+        logger.warning("⚠️ frontend/ folder not found - website disabled")
+
     # TODO: Import other routers as they're created
     # Notifications, Advanced Reporting coming in Phase 5-6
     

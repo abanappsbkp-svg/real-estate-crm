@@ -8,6 +8,10 @@ from datetime import datetime, timedelta
 from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, status
 from sqlalchemy.orm import Session
 import logging
+import mimetypes
+from urllib.parse import quote
+
+from fastapi.responses import Response
 
 from db import get_db
 from models import Document, DocumentShare, User, UserRole
@@ -92,7 +96,7 @@ async def upload_document(
             property_id=property_id,
             deal_id=deal_id,
             tags=tags,
-            metadata=metadata or {},
+            metadata={**(metadata or {}), "original_filename": file.filename},
         )
         
         return {
@@ -195,6 +199,42 @@ async def list_documents(
 # ============================================================================
 # Get Document Details
 # ============================================================================
+
+@router.get("/{document_id}/download")
+async def download_document(
+    document_id: str,
+    version: Optional[int] = None,
+    user_context: UserContext = Depends(require_role(UserRole.AGENT)),
+    service: DocumentService = Depends(get_document_service),
+):
+    """
+    Download the file content of a document (latest version, or ?version=N)
+
+    **Authorization:** Agent or Admin of the same organization
+    """
+    organization_id = str(user_context.organization_id)
+    doc = service.get_document(document_id, organization_id)
+    if not doc:
+        raise HTTPException(status_code=404, detail="Document not found")
+
+    version_number = version or doc.version_number
+    doc_version = service.get_document_version(document_id, version_number)
+    if not doc_version or doc_version.content is None:
+        raise HTTPException(status_code=404, detail=f"Version {version_number} not found")
+
+    mime_type = doc_version.mime_type or doc.mime_type or "application/octet-stream"
+    filename = (doc.doc_metadata or {}).get("original_filename") or doc.name
+    if "." not in filename:
+        filename += mimetypes.guess_extension(mime_type) or ""
+    ascii_name = filename.encode("ascii", "ignore").decode() or "document"
+    return Response(
+        content=doc_version.content,
+        media_type=mime_type,
+        headers={
+            "Content-Disposition": f"attachment; filename=\"{ascii_name}\"; filename*=UTF-8''{quote(filename)}"
+        },
+    )
+
 
 @router.get("/{document_id}")
 async def get_document(

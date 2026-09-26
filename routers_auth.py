@@ -7,12 +7,14 @@ from fastapi import APIRouter, Depends, HTTPException, status, Request
 from sqlalchemy.orm import Session
 from datetime import datetime
 from typing import Optional
+import os
+import re
 
-from models import User, UserRole
+from pydantic import BaseModel, EmailStr, Field
+
+from models import User, UserRole, Organization
 from services_auth import AuthService, AuthenticationError
-# from middleware_auth import (
-#     attach_user_context,
-# )
+from middleware_auth import (
     get_current_user,
     get_optional_user,
     get_user_context,
@@ -26,10 +28,85 @@ from services_auth import AuthService, AuthenticationError
     UserResponse,
     ErrorResponse,
 )
-from main import get_db
+from db import get_db
 
 # Create router
 router = APIRouter(prefix="/auth", tags=["Authentication"])
+
+# ============================================================================
+# First-time Setup: create an organization and its admin
+# ============================================================================
+
+class SetupRequest(BaseModel):
+    """Create a new organization together with its first admin user"""
+    organization_name: str = Field(..., min_length=2, max_length=255)
+    email: EmailStr
+    password: str
+    first_name: str
+    last_name: str
+    phone: Optional[str] = None
+
+
+@router.post(
+    "/setup",
+    response_model=dict,
+    status_code=status.HTTP_201_CREATED,
+)
+async def setup_organization(
+    data: SetupRequest,
+    db: Session = Depends(get_db),
+):
+    """
+    Create an organization and its first ADMIN user.
+
+    Allowed only while the system has no organizations yet (first-time setup),
+    unless the ALLOW_ORG_SIGNUP environment variable is set to "true".
+    After this, log in with the same email/password and use /auth/register
+    (with the returned organization_id) to add more users.
+    """
+    allow_signup = os.getenv("ALLOW_ORG_SIGNUP", "false").lower() == "true"
+    if not allow_signup and db.query(Organization).first() is not None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Setup already completed. Ask your admin to add you as a user.",
+        )
+
+    base_slug = re.sub(r"[^a-z0-9]+", "-", data.organization_name.lower()).strip("-") or "org"
+    slug = base_slug
+    suffix = 1
+    while db.query(Organization).filter(Organization.slug == slug).first():
+        suffix += 1
+        slug = f"{base_slug}-{suffix}"
+
+    org = Organization(name=data.organization_name, slug=slug)
+    db.add(org)
+    db.commit()
+    db.refresh(org)
+
+    try:
+        user = AuthService(db).register_user(
+            organization_id=str(org.id),
+            email=data.email,
+            password=data.password,
+            first_name=data.first_name,
+            last_name=data.last_name,
+            phone=data.phone,
+            role=UserRole.ADMIN,
+        )
+    except AuthenticationError as e:
+        db.delete(org)
+        db.commit()
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
+
+    return {
+        "status": "success",
+        "message": "Organization and admin user created. You can now log in.",
+        "data": {
+            "organization_id": str(org.id),
+            "organization_slug": org.slug,
+            "user": UserResponse.model_validate(user),
+        },
+    }
 
 # ============================================================================
 # Login Endpoint

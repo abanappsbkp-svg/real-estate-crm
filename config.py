@@ -42,18 +42,12 @@ class Settings(BaseSettings):
     JWT_PRIVATE_KEY: str = os.getenv("JWT_PRIVATE_KEY", "")
     JWT_PUBLIC_KEY: str = os.getenv("JWT_PUBLIC_KEY", "")
     
-    # CORS
-    ALLOWED_ORIGINS: List[str] = [
-        "http://localhost:3000",
-        "http://localhost:5173",
-        "https://localhost:3000",
-        "https://localhost:5173",
-    ]
-    ALLOWED_HOSTS: List[str] = [
-        "localhost",
-        "127.0.0.1",
-        "*.example.com",
-    ]
+    # CORS: which websites (front-ends) may call this API.
+    # "*" = any. Override on Render with e.g. ALLOWED_ORIGINS=["https://app.yourdomain.com"]
+    ALLOWED_ORIGINS: List[str] = ["*"]
+    # Host names this API answers to. "*" = any (Render + your own domain).
+    # Override on Render with e.g. ALLOWED_HOSTS=["api.yourdomain.com","your-app.onrender.com"]
+    ALLOWED_HOSTS: List[str] = ["*"]
     
     # File Storage (S3 or MinIO)
     FILE_STORAGE_TYPE: str = os.getenv("FILE_STORAGE_TYPE", "s3")  # s3 or minio

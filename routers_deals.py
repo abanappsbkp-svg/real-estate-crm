@@ -14,16 +14,17 @@ from middleware_auth import (
 )
 from services_deals import DealService
 from models import User, UserRole
+from models import APIModel
 from db import get_db
 
 # ============================================================================
 # Pydantic Models
 # ============================================================================
 
-class CreateDealRequest(BaseModel):
+class CreateDealRequest(APIModel):
     client_id: str
     property_id: str
-    deal_type: str = Field(default="sale", regex="^(sale|rental|lease)$")
+    deal_type: str = Field(default="sale", pattern="^(sale|rental|lease)$")
     proposed_price: Optional[float] = Field(None, gt=0)
     offer_price: Optional[float] = Field(None, gt=0)
     earnest_money: Optional[float] = Field(None, ge=0)
@@ -31,29 +32,29 @@ class CreateDealRequest(BaseModel):
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
 
-class UpdateDealRequest(BaseModel):
+class UpdateDealRequest(APIModel):
     proposed_price: Optional[float] = Field(None, gt=0)
     offer_price: Optional[float] = Field(None, gt=0)
     earnest_money: Optional[float] = Field(None, ge=0)
     expected_close_date: Optional[datetime] = None
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
-    status: Optional[str] = Field(None, regex="^(active|inactive|won|lost)$")
+    status: Optional[str] = Field(None, pattern="^(active|inactive|won|lost)$")
 
-class MoveStagRequest(BaseModel):
-    new_stage: str = Field(..., regex="^(lead|offer|negotiation|inspection|appraisal|closed)$")
+class MoveStagRequest(APIModel):
+    new_stage: str = Field(..., pattern="^(lead|offer|negotiation|inspection|appraisal|closed)$")
     reason: Optional[str] = None
 
-class UpdateOfferRequest(BaseModel):
+class UpdateOfferRequest(APIModel):
     offer_price: float = Field(..., gt=0)
     earnest_money: Optional[float] = Field(None, ge=0)
 
-class CloseDealRequest(BaseModel):
+class CloseDealRequest(APIModel):
     actual_close_date: Optional[datetime] = None
     final_price: Optional[float] = Field(None, gt=0)
     notes: Optional[str] = None
 
-class DealStageHistoryResponse(BaseModel):
+class DealStageHistoryResponse(APIModel):
     id: str
     deal_id: str
     from_stage: Optional[str]
@@ -65,7 +66,7 @@ class DealStageHistoryResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class DealResponse(BaseModel):
+class DealResponse(APIModel):
     id: str
     organization_id: str
     client_id: str
@@ -87,34 +88,34 @@ class DealResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class DealListResponse(BaseModel):
+class DealListResponse(APIModel):
     deals: List[DealResponse]
     total: int
     skip: int
     limit: int
 
-class PriceNegotiationResponse(BaseModel):
+class PriceNegotiationResponse(APIModel):
     proposed_price: float
     offer_price: float
     difference: float
     percentage_below: float
     earnest_money: Optional[float]
 
-class CommissionResponse(BaseModel):
+class CommissionResponse(APIModel):
     sale_price: float
     commission_rate: float
     total_commission: float
     agent_commission: float
     broker_commission: float
 
-class PipelineStatsResponse(BaseModel):
+class PipelineStatsResponse(APIModel):
     total_active_deals: int
     by_stage: Dict[str, Dict[str, Any]]
     total_pipeline_value: float
     average_deal_value: float
     by_status: Dict[str, int]
 
-class AgentPerformanceResponse(BaseModel):
+class AgentPerformanceResponse(APIModel):
     total_deals: int
     closed_deals: int
     close_rate: float
@@ -122,12 +123,12 @@ class AgentPerformanceResponse(BaseModel):
     average_deal_value: float
     average_days_to_close: int
 
-class RevenueForecaseResponse(BaseModel):
+class RevenueForecaseResponse(APIModel):
     best_case: float
     worst_case: float
     probable: float
 
-class DealStatsResponse(BaseModel):
+class DealStatsResponse(APIModel):
     total_deals: int
     active_deals: int
     won_deals: int
@@ -217,11 +218,11 @@ async def create_deal(
 async def list_deals(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    status: Optional[str] = Query(None, regex="^(active|inactive|won|lost)?$"),
+    status: Optional[str] = Query(None, pattern="^(active|inactive|won|lost)?$"),
     stage: Optional[str] = Query(None),
-    deal_type: Optional[str] = Query(None, regex="^(sale|rental|lease)?$"),
-    sort_by: str = Query("created_at", regex="^(created_at|expected_close_date|offer_price)$"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+    deal_type: Optional[str] = Query(None, pattern="^(sale|rental|lease)?$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|expected_close_date|offer_price)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> DealListResponse:

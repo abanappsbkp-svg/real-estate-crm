@@ -17,7 +17,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import relationship, validates
+from sqlalchemy.orm import relationship, validates, synonym
 from sqlalchemy.sql import text
 
 from pydantic import BaseModel, EmailStr, Field, validator, root_validator
@@ -33,6 +33,8 @@ class UserRole(str, Enum):
 
 class PropertyStatus(str, Enum):
     AVAILABLE = "available"
+    PENDING = "pending"
+    EXPIRED = "expired"
     RESERVED = "reserved"
     SOLD = "sold"
     RENTED = "rented"
@@ -73,6 +75,13 @@ class InteractionType(str, Enum):
 # SQLAlchemy Base
 # ============================================================================
 Base = declarative_base()
+
+
+def as_uuid(value):
+    """Accept a UUID object or a UUID string and always return a uuid.UUID"""
+    if isinstance(value, uuid.UUID):
+        return value
+    return uuid.UUID(str(value))
 
 # ============================================================================
 # Organization & Users (SQLAlchemy Models)
@@ -152,7 +161,12 @@ class User(Base):
     
     @property
     def full_name(self) -> str:
-        return f"{self.first_name} {self.last_name}".strip()
+        return f"{self.first_name or ''} {self.last_name or ''}".strip()
+
+    @property
+    def user_id(self) -> str:
+        """String id, so routers can use a User wherever a UserContext was expected"""
+        return str(self.id)
     
     @validates("email")
     def validate_email(self, key, email):
@@ -249,7 +263,14 @@ class PropertyHistory(Base):
     new_value = Column(Text)
     change_type = Column(String(50))
     change_reason = Column(Text)
+    status_from = Column(String(50))
+    status_to = Column(String(50))
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    # Aliases used by services_properties.py
+    changed_by_id = synonym("changed_by")
+    reason = synonym("change_reason")
+    changed_at = synonym("created_at")
     
     # Relationships
     property = relationship("Property", back_populates="history")
@@ -280,7 +301,7 @@ class Client(Base):
     date_of_birth = Column(Date)
     
     # Lead info
-    source = Column(String(50), nullable=False)
+    source = Column(String(50), default=LeadSource.OTHER.value)
     source_details = Column(Text)
     acquisition_date = Column(DateTime, default=datetime.utcnow)
     
@@ -309,6 +330,15 @@ class Client(Base):
     
     # Custom fields
     custom_fields = Column(JSONB, default={})
+
+    # CRM classification (used by services_clients.py)
+    type = Column(String(20), default="buyer")        # buyer, seller, both
+    status = Column(String(20), default="active")     # active, inactive, archived
+    notes = Column(Text)
+    created_by_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    last_interaction_at = Column(DateTime)
+    interaction_count = Column(Integer, default=0)
+    phone = synonym("phone_primary")
     
     # Audit
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
@@ -364,9 +394,17 @@ class ClientInteraction(Base):
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     
     interaction_type = Column(String(50), nullable=False)
+    description = Column(Text)
+    notes = Column(Text)
+    duration_minutes = Column(Integer)
+    completed_at = Column(DateTime)
+
+    # Aliases used by services_clients.py
+    type = synonym("interaction_type")
+    user_id = synonym("agent_id")
     direction = Column(String(20))  # inbound, outbound
     subject = Column(String(255))
     content = Column(Text)
@@ -413,11 +451,12 @@ class Deal(Base):
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="CASCADE"), nullable=False)
     property_id = Column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="CASCADE"), nullable=False)
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     
     # Deal info
-    deal_type = Column(String(50), nullable=False)  # sale, rental
-    stage = Column(String(50), default=DealStage.INQUIRY.value, nullable=False)
+    deal_type = Column(String(50), nullable=False, default="sale")  # sale, rental, lease
+    status = Column(String(20), default="active")  # active, inactive, won, lost
+    stage = Column(String(50), default="lead", nullable=False)  # lead, offer, negotiation, inspection, appraisal, closed
     
     # Financial
     proposed_price = Column(Numeric(12, 2))
@@ -425,6 +464,8 @@ class Deal(Base):
     commission_percent = Column(Numeric(5, 2))
     commission_amount = Column(Numeric(12, 2))
     closing_cost = Column(Numeric(12, 2))
+    offer_price = Column(Numeric(12, 2))
+    earnest_money = Column(Numeric(12, 2))
     
     # Timeline
     inquiry_date = Column(DateTime, default=datetime.utcnow)
@@ -432,11 +473,18 @@ class Deal(Base):
     offer_date = Column(DateTime)
     expected_closing_date = Column(DateTime)
     actual_closing_date = Column(DateTime)
+    closed_at = Column(DateTime)
     
     # Notes
     internal_notes = Column(Text)
     client_notes = Column(Text)
     contingencies = Column(Text)
+    notes = Column(Text)
+    custom_fields = Column(JSONB, default={})
+
+    # Aliases used by services_deals.py
+    type = synonym("deal_type")
+    expected_close_date = synonym("expected_closing_date")
     
     # Status
     is_active = Column(Boolean, default=True)
@@ -551,14 +599,16 @@ class CallLog(Base):
     organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
     client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="SET NULL"))
     property_id = Column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="SET NULL"))
-    agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"), nullable=False)
+    agent_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
     
     call_type = Column(String(50), nullable=False)
     phone_number = Column(String(20))
-    duration_seconds = Column(Integer, nullable=False)
+    duration_seconds = Column(Integer, nullable=False, default=0)
     
     transcript = Column(Text)
-    transcript_language = Column(String(5))
+    transcript_language = Column(String(10))
+    transcript_provider = Column(String(50))
+    notes = Column(Text)
     ai_summary = Column(Text)
     key_topics = Column(ARRAY(String), default=[])
     action_items = Column(ARRAY(String), default=[])
@@ -572,13 +622,103 @@ class CallLog(Base):
     call_quality = Column(String(50))
     
     created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow)
     processed_at = Column(DateTime)
+    deleted_at = Column(DateTime)
     
     # Relationships
     organization = relationship("Organization", back_populates="call_logs")
     client = relationship("Client", back_populates="call_logs")
     property = relationship("Property", back_populates="call_logs")
     agent = relationship("User", back_populates="call_logs")
+
+# ============================================================================
+# Documents (Phase 5B)
+# ============================================================================
+class Document(Base):
+    """Documents with versioning, sharing and retention"""
+    __tablename__ = "documents"
+    __table_args__ = (
+        Index("idx_documents_org", "organization_id"),
+        Index("idx_documents_client", "client_id"),
+        Index("idx_documents_property", "property_id"),
+        Index("idx_documents_deal", "deal_id"),
+        Index("idx_documents_type", "document_type"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    updated_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    deleted_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+
+    name = Column(String(255), nullable=False)
+    document_type = Column(String(50), nullable=False)  # contract, disclosure, proposal, ...
+    mime_type = Column(String(100))
+    file_size = Column(Integer, default=0)
+    storage_location = Column(String)
+    version_number = Column(Integer, default=1, nullable=False)
+
+    client_id = Column(UUID(as_uuid=True), ForeignKey("clients.id", ondelete="SET NULL"))
+    property_id = Column(UUID(as_uuid=True), ForeignKey("properties.id", ondelete="SET NULL"))
+    deal_id = Column(UUID(as_uuid=True), ForeignKey("deals.id", ondelete="SET NULL"))
+
+    tags = Column(ARRAY(String), default=[])
+    # "metadata" is a reserved name in SQLAlchemy, so the Python attribute is doc_metadata
+    doc_metadata = Column("metadata", JSONB, default={})
+
+    retention_until = Column(DateTime)
+    retention_reason = Column(String(100))
+
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+    updated_at = Column(DateTime, default=datetime.utcnow, onupdate=datetime.utcnow, nullable=False)
+    deleted_at = Column(DateTime)
+
+    versions = relationship("DocumentVersion", back_populates="document", cascade="all, delete-orphan")
+    shares = relationship("DocumentShare", back_populates="document", cascade="all, delete-orphan")
+
+
+class DocumentVersion(Base):
+    """Every saved version of a document"""
+    __tablename__ = "document_versions"
+    __table_args__ = (
+        UniqueConstraint("document_id", "version_number", name="uq_document_version"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    version_number = Column(Integer, nullable=False)
+    created_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    content = Column(LargeBinary)
+    mime_type = Column(String(100))
+    file_size = Column(Integer, default=0)
+    storage_location = Column(String)
+    change_notes = Column(Text)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    document = relationship("Document", back_populates="versions")
+
+
+class DocumentShare(Base):
+    """Sharing a document with a user or an external email"""
+    __tablename__ = "document_shares"
+    __table_args__ = (
+        Index("idx_document_shares_document", "document_id"),
+        Index("idx_document_shares_user", "share_with_user_id"),
+    )
+
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False)
+    organization_id = Column(UUID(as_uuid=True), ForeignKey("organizations.id", ondelete="CASCADE"), nullable=False)
+    shared_by = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="SET NULL"))
+    share_with_user_id = Column(UUID(as_uuid=True), ForeignKey("users.id", ondelete="CASCADE"))
+    share_with_email = Column(String(255))
+    permission = Column(String(20), default="view")  # view, comment, edit
+    expiry_date = Column(DateTime)
+    created_at = Column(DateTime, default=datetime.utcnow, nullable=False)
+
+    document = relationship("Document", back_populates="shares")
+
 
 # ============================================================================
 # Multilingual Support
@@ -640,6 +780,32 @@ class AuditLog(Base):
 # ============================================================================
 # Pydantic Schemas (for API validation)
 # ============================================================================
+
+from pydantic import field_validator
+
+
+class APIModel(BaseModel):
+    """
+    Base for API request/response models.
+    Converts database values into the plain types the API models declare:
+    UUID -> str, Decimal -> float, datetime -> ISO text (when the field is text).
+    """
+
+    @field_validator("*", mode="before")
+    @classmethod
+    def _coerce_db_values(cls, value, info):
+        field = cls.model_fields.get(info.field_name)
+        annotation = str(field.annotation) if field else ""
+        if isinstance(value, uuid.UUID):
+            return str(value)
+        if isinstance(value, Decimal):
+            return float(value)
+        if isinstance(value, (datetime, date)) and "datetime" not in annotation and "date" not in annotation:
+            return value.isoformat()
+        if isinstance(value, list):
+            return [str(v) if isinstance(v, uuid.UUID) else v for v in value]
+        return value
+
 
 class LanguageSchema(BaseModel):
     id: str

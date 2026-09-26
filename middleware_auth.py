@@ -4,14 +4,14 @@ Handles JWT verification and user context injection
 """
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer
+from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 from typing import Optional, Callable
 
 from models import User, UserRole
 from services_auth import AuthService
 from utils_auth import extract_token_from_header, ERROR_INVALID_TOKEN
-from main import get_db
+from db import get_db
 
 # ============================================================================
 # HTTP Bearer Security
@@ -28,7 +28,7 @@ security = HTTPBearer(
 # ============================================================================
 
 async def get_current_user(
-    # credentials: Optional[HTTPAuthCredentials] = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
     """
@@ -76,7 +76,7 @@ async def get_current_user(
 # ============================================================================
 
 async def get_optional_user(
-    credentials: Optional[HTTPAuthCredentials] = Depends(security),
+    credentials: Optional[HTTPAuthorizationCredentials] = Depends(security),
     db: Session = Depends(get_db),
 ) -> Optional[User]:
     """
@@ -260,6 +260,8 @@ async def get_user_context(
 # ============================================================================
 
 from pydantic import BaseModel, EmailStr
+from uuid import UUID
+from datetime import datetime
 
 class LoginRequest(BaseModel):
     """Login request payload"""
@@ -324,18 +326,19 @@ class ChangePasswordRequest(BaseModel):
 
 class UserResponse(BaseModel):
     """User response (for API responses)"""
-    id: str
+    id: UUID
+    organization_id: Optional[UUID] = None
     email: str
-    first_name: Optional[str]
-    last_name: Optional[str]
-    full_name: Optional[str]
-    phone: Optional[str]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    full_name: Optional[str] = None
+    phone: Optional[str] = None
     role: str
-    avatar_url: Optional[str]
-    preferred_language: str
-    is_active: bool
-    last_login: Optional[str]
-    created_at: str
+    avatar_url: Optional[str] = None
+    preferred_language: Optional[str] = "en"
+    is_active: bool = True
+    last_login: Optional[datetime] = None
+    created_at: datetime
     
     class Config:
         from_attributes = True

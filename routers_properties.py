@@ -9,16 +9,17 @@ from typing import Optional, List
 from datetime import datetime
 
 from models import User, UserRole, Property
+from models import APIModel
 from services_properties import PropertyService
 from middleware_auth import get_current_user, require_role
-from main import get_db
+from db import get_db
 from pydantic import BaseModel, Field
 
 # ============================================================================
 # Request/Response Models
 # ============================================================================
 
-class AddressSchema(BaseModel):
+class AddressSchema(APIModel):
     """Address information"""
     street: str
     city: str
@@ -41,7 +42,7 @@ class AddressSchema(BaseModel):
             }
         }
 
-class PropertyCreateRequest(BaseModel):
+class PropertyCreateRequest(APIModel):
     """Request to create new property"""
     address: AddressSchema
     property_type: str = Field(..., description="house, apartment, condo, etc.")
@@ -75,7 +76,7 @@ class PropertyCreateRequest(BaseModel):
             }
         }
 
-class PropertyUpdateRequest(BaseModel):
+class PropertyUpdateRequest(APIModel):
     """Request to update property"""
     bedrooms: Optional[int] = None
     bathrooms: Optional[float] = None
@@ -84,17 +85,17 @@ class PropertyUpdateRequest(BaseModel):
     features: Optional[List[str]] = None
     description: Optional[str] = None
 
-class PropertyStatusUpdateRequest(BaseModel):
+class PropertyStatusUpdateRequest(APIModel):
     """Request to update property status"""
     status: str = Field(..., description="available, pending, sold, expired, withdrawn")
     notes: Optional[str] = None
 
-class PropertyPriceUpdateRequest(BaseModel):
+class PropertyPriceUpdateRequest(APIModel):
     """Request to update property price"""
     new_price: float = Field(..., gt=0, description="Must be positive")
     reason: Optional[str] = None
 
-class PropertyResponse(BaseModel):
+class PropertyResponse(APIModel):
     """Property response DTO"""
     id: str
     organization_id: str
@@ -118,8 +119,8 @@ class PropertyResponse(BaseModel):
 
 class PropertyDetailResponse(PropertyResponse):
     """Detailed property response with history"""
-    price_history: Optional[List[dict]]
-    photos: Optional[List[dict]]
+    price_history: Optional[List[dict]] = None
+    photos: Optional[List[dict]] = None
     created_at_display: Optional[str] = None
     
     class Config:

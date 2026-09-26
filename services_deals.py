@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 import uuid
+from models import as_uuid
 
 from models import (
     Deal, DealStageHistory, Client, Property, User, UserRole, 
@@ -63,17 +64,17 @@ class DealService:
         """
         # Get property for context
         property_obj = self.db.query(Property).filter(
-            Property.id == uuid.UUID(property_id)
+            Property.id == as_uuid(property_id)
         ).first()
         
         if not property_obj:
             raise ValueError("Property not found")
         
         deal = Deal(
-            organization_id=uuid.UUID(organization_id),
-            client_id=uuid.UUID(client_id),
-            property_id=uuid.UUID(property_id),
-            agent_id=uuid.UUID(agent_id),
+            organization_id=as_uuid(organization_id),
+            client_id=as_uuid(client_id),
+            property_id=as_uuid(property_id),
+            agent_id=as_uuid(agent_id),
             type=deal_type,
             status=status,
             stage=stage,
@@ -94,7 +95,7 @@ class DealService:
             deal_id=deal.id,
             from_stage=None,
             to_stage=stage,
-            changed_by=uuid.UUID(agent_id),
+            changed_by=as_uuid(agent_id),
             reason="Deal created",
         )
         self.db.add(stage_history)
@@ -130,11 +131,11 @@ class DealService:
     ) -> Optional[Deal]:
         """Get deal by ID"""
         query = self.db.query(Deal).filter(
-            Deal.id == uuid.UUID(deal_id),
+            Deal.id == as_uuid(deal_id),
         )
         
         if organization_id:
-            query = query.filter(Deal.organization_id == uuid.UUID(organization_id))
+            query = query.filter(Deal.organization_id == as_uuid(organization_id))
         
         return query.first()
     
@@ -174,7 +175,7 @@ class DealService:
             Tuple of (deals list, total count)
         """
         query = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id),
+            Deal.organization_id == as_uuid(organization_id),
         )
         
         # Apply filters
@@ -188,13 +189,13 @@ class DealService:
             query = query.filter(Deal.type == deal_type)
         
         if agent_id:
-            query = query.filter(Deal.agent_id == uuid.UUID(agent_id))
+            query = query.filter(Deal.agent_id == as_uuid(agent_id))
         
         if client_id:
-            query = query.filter(Deal.client_id == uuid.UUID(client_id))
+            query = query.filter(Deal.client_id == as_uuid(client_id))
         
         if property_id:
-            query = query.filter(Deal.property_id == uuid.UUID(property_id))
+            query = query.filter(Deal.property_id == as_uuid(property_id))
         
         if search_query:
             # Would need to join with Client/Property tables for better search
@@ -327,10 +328,10 @@ class DealService:
         
         # Create stage history
         stage_history = DealStageHistory(
-            deal_id=uuid.UUID(deal_id),
+            deal_id=as_uuid(deal_id),
             from_stage=old_stage,
             to_stage=new_stage,
-            changed_by=uuid.UUID(changed_by_id),
+            changed_by=as_uuid(changed_by_id),
             reason=reason,
         )
         self.db.add(stage_history)
@@ -353,7 +354,7 @@ class DealService:
     def get_stage_history(self, deal_id: str) -> List[DealStageHistory]:
         """Get complete stage transition history for a deal"""
         return self.db.query(DealStageHistory).filter(
-            DealStageHistory.deal_id == uuid.UUID(deal_id)
+            DealStageHistory.deal_id == as_uuid(deal_id)
         ).order_by(DealStageHistory.created_at.asc()).all()
     
     def get_stage_duration(self, deal_id: str, stage: str) -> Optional[int]:
@@ -543,10 +544,10 @@ class DealService:
         
         # Create final stage history
         stage_history = DealStageHistory(
-            deal_id=uuid.UUID(deal_id),
+            deal_id=as_uuid(deal_id),
             from_stage="appraisal",
             to_stage="closed",
-            changed_by=uuid.UUID(user_id) if user_id else None,
+            changed_by=as_uuid(user_id) if user_id else None,
             reason="Deal closed",
         )
         self.db.add(stage_history)
@@ -603,7 +604,7 @@ class DealService:
     def get_pipeline_stats(self, organization_id: str) -> Dict[str, Any]:
         """Get pipeline statistics for organization"""
         deals = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id),
+            Deal.organization_id == as_uuid(organization_id),
             Deal.is_active == True,
         ).all()
         
@@ -627,7 +628,7 @@ class DealService:
         
         # By status
         all_deals = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id)
+            Deal.organization_id == as_uuid(organization_id)
         ).all()
         
         for deal in all_deals:
@@ -659,11 +660,11 @@ class DealService:
             }
         """
         query = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id)
+            Deal.organization_id == as_uuid(organization_id)
         )
         
         if agent_id:
-            query = query.filter(Deal.agent_id == uuid.UUID(agent_id))
+            query = query.filter(Deal.agent_id == as_uuid(agent_id))
         
         deals = query.all()
         closed_deals = [d for d in deals if d.status == "won"]
@@ -728,7 +729,7 @@ class DealService:
             }
         
         deals = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id),
+            Deal.organization_id == as_uuid(organization_id),
             Deal.is_active == True,
         ).all()
         
@@ -792,21 +793,21 @@ class DealService:
     def get_deal_stats(self, organization_id: str) -> Dict[str, Any]:
         """Get deal statistics for organization"""
         total = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id)
+            Deal.organization_id == as_uuid(organization_id)
         ).count()
         
         active = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id),
+            Deal.organization_id == as_uuid(organization_id),
             Deal.is_active == True,
         ).count()
         
         won = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id),
+            Deal.organization_id == as_uuid(organization_id),
             Deal.status == "won",
         ).count()
         
         lost = self.db.query(Deal).filter(
-            Deal.organization_id == uuid.UUID(organization_id),
+            Deal.organization_id == as_uuid(organization_id),
             Deal.status == "lost",
         ).count()
         
@@ -835,11 +836,11 @@ class DealService:
     ):
         """Log audit trail entry"""
         audit_log = AuditLog(
-            organization_id=uuid.UUID(organization_id),
-            user_id=uuid.UUID(user_id) if user_id else None,
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id) if user_id else None,
             action=action,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if entity_id else None,
+            entity_id=as_uuid(entity_id) if entity_id else None,
             old_values=old_values,
             new_values=new_values,
         )

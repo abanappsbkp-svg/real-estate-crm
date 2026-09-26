@@ -8,6 +8,7 @@ from datetime import datetime
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_
 import uuid
+from models import as_uuid
 
 from models import User, Organization, UserRole, AuditLog
 from utils_auth import (
@@ -87,7 +88,7 @@ class AuthService:
         
         # Check if organization exists
         org = self.db.query(Organization).filter(
-            Organization.id == uuid.UUID(organization_id)
+            Organization.id == as_uuid(organization_id)
         ).first()
         
         if not org:
@@ -96,7 +97,7 @@ class AuthService:
         # Check if email already exists in organization
         existing_user = self.db.query(User).filter(
             and_(
-                User.organization_id == uuid.UUID(organization_id),
+                User.organization_id == as_uuid(organization_id),
                 User.email == email.lower(),
             )
         ).first()
@@ -106,7 +107,7 @@ class AuthService:
         
         # Create new user
         user = User(
-            organization_id=uuid.UUID(organization_id),
+            organization_id=as_uuid(organization_id),
             email=email.lower(),
             password_hash=hash_password(password),
             first_name=first_name,
@@ -258,7 +259,7 @@ class AuthService:
             
             # Get user
             user = self.db.query(User).filter(
-                User.id == uuid.UUID(user_id)
+                User.id == as_uuid(user_id)
             ).first()
             
             if not user or not user.is_active:
@@ -313,7 +314,7 @@ class AuthService:
             
             # Get user
             user = self.db.query(User).filter(
-                User.id == uuid.UUID(user_id)
+                User.id == as_uuid(user_id)
             ).first()
             
             if not user or not user.is_active:
@@ -368,7 +369,7 @@ class AuthService:
         """
         # Get user
         user = self.db.query(User).filter(
-            User.id == uuid.UUID(user_id)
+            User.id == as_uuid(user_id)
         ).first()
         
         if not user:
@@ -441,7 +442,7 @@ class AuthService:
     def get_user(self, user_id: str) -> Optional[User]:
         """Get user by ID"""
         return self.db.query(User).filter(
-            User.id == uuid.UUID(user_id)
+            User.id == as_uuid(user_id)
         ).first()
     
     def update_user_profile(
@@ -547,11 +548,11 @@ class AuthService:
             return  # Don't log if no org (e.g., during login attempt)
         
         audit_log = AuditLog(
-            organization_id=uuid.UUID(organization_id),
-            user_id=uuid.UUID(user_id) if user_id else None,
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id) if user_id else None,
             action=action,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if entity_id else None,
+            entity_id=as_uuid(entity_id) if entity_id else None,
             old_values=old_values,
             new_values=new_values,
             status=status,

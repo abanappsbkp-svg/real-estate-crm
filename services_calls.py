@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 import uuid
+from models import as_uuid
 import json
 
 from models import (
@@ -56,10 +57,10 @@ class CallLogService:
             Created CallLog object
         """
         call_log = CallLog(
-            organization_id=uuid.UUID(organization_id),
-            agent_id=uuid.UUID(agent_id),
-            client_id=uuid.UUID(client_id) if client_id else None,
-            property_id=uuid.UUID(property_id) if property_id else None,
+            organization_id=as_uuid(organization_id),
+            agent_id=as_uuid(agent_id),
+            client_id=as_uuid(client_id) if client_id else None,
+            property_id=as_uuid(property_id) if property_id else None,
             call_type=call_type,
             phone_number=phone_number,
             duration_seconds=duration_seconds,
@@ -100,11 +101,11 @@ class CallLogService:
     ) -> Optional[CallLog]:
         """Get call by ID"""
         query = self.db.query(CallLog).filter(
-            CallLog.id == uuid.UUID(call_id)
+            CallLog.id == as_uuid(call_id)
         )
         
         if organization_id:
-            query = query.filter(CallLog.organization_id == uuid.UUID(organization_id))
+            query = query.filter(CallLog.organization_id == as_uuid(organization_id))
         
         return query.first()
     
@@ -142,18 +143,18 @@ class CallLogService:
             Tuple of (calls list, total count)
         """
         query = self.db.query(CallLog).filter(
-            CallLog.organization_id == uuid.UUID(organization_id)
+            CallLog.organization_id == as_uuid(organization_id)
         )
         
         # Apply filters
         if agent_id:
-            query = query.filter(CallLog.agent_id == uuid.UUID(agent_id))
+            query = query.filter(CallLog.agent_id == as_uuid(agent_id))
         
         if client_id:
-            query = query.filter(CallLog.client_id == uuid.UUID(client_id))
+            query = query.filter(CallLog.client_id == as_uuid(client_id))
         
         if property_id:
-            query = query.filter(CallLog.property_id == uuid.UUID(property_id))
+            query = query.filter(CallLog.property_id == as_uuid(property_id))
         
         if call_type:
             query = query.filter(CallLog.call_type == call_type)
@@ -346,12 +347,12 @@ class CallLogService:
             date_from = datetime.utcnow() - timedelta(days=30)
         
         query = self.db.query(CallLog).filter(
-            CallLog.organization_id == uuid.UUID(organization_id),
+            CallLog.organization_id == as_uuid(organization_id),
             CallLog.created_at >= date_from,
         )
         
         if agent_id:
-            query = query.filter(CallLog.agent_id == uuid.UUID(agent_id))
+            query = query.filter(CallLog.agent_id == as_uuid(agent_id))
         
         calls = query.all()
         
@@ -400,13 +401,13 @@ class CallLogService:
     def get_client_call_history(self, client_id: str, limit: int = 50) -> List[CallLog]:
         """Get all calls for a specific client"""
         return self.db.query(CallLog).filter(
-            CallLog.client_id == uuid.UUID(client_id)
+            CallLog.client_id == as_uuid(client_id)
         ).order_by(CallLog.created_at.desc()).limit(limit).all()
     
     def get_property_call_history(self, property_id: str, limit: int = 50) -> List[CallLog]:
         """Get all calls related to a specific property"""
         return self.db.query(CallLog).filter(
-            CallLog.property_id == uuid.UUID(property_id)
+            CallLog.property_id == as_uuid(property_id)
         ).order_by(CallLog.created_at.desc()).limit(limit).all()
     
     # ========================================================================
@@ -526,11 +527,11 @@ class CallLogService:
     ):
         """Log audit trail entry"""
         audit_log = AuditLog(
-            organization_id=uuid.UUID(organization_id),
-            user_id=uuid.UUID(user_id) if user_id else None,
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id) if user_id else None,
             action=action,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if entity_id else None,
+            entity_id=as_uuid(entity_id) if entity_id else None,
             old_values=old_values,
             new_values=new_values,
         )

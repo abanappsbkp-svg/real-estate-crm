@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, UploadFile, File, 
 from sqlalchemy.orm import Session
 import logging
 
-from config import get_db
+from db import get_db
 from models import Document, DocumentShare, User, UserRole
 from services_documents import DocumentService
 from middleware_auth import require_role, get_current_user, UserContext
@@ -32,7 +32,6 @@ def get_document_service(db: Session = Depends(get_db)) -> DocumentService:
 
 @router.post("/upload")
 async def upload_document(
-    organization_id: str,
     name: str,
     document_type: str,
     file: UploadFile = File(...),
@@ -63,6 +62,8 @@ async def upload_document(
     Returns:
         Created document object
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         # Validate document type
         valid_types = ["contract", "disclosure", "proposal", "agreement", "deed", "inspection", "appraisal", "other"]
@@ -115,7 +116,6 @@ async def upload_document(
 
 @router.get("")
 async def list_documents(
-    organization_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     document_type: Optional[str] = None,
@@ -124,8 +124,8 @@ async def list_documents(
     deal_id: Optional[str] = None,
     tags: Optional[List[str]] = None,
     search_term: Optional[str] = None,
-    sort_by: str = Query("created_at", regex="^(created_at|name)$"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|name)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: DocumentService = Depends(get_document_service),
 ) -> dict:
@@ -149,6 +149,8 @@ async def list_documents(
     Returns:
         Paginated list of documents
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         documents, total = service.list_documents(
             organization_id=organization_id,
@@ -197,7 +199,6 @@ async def list_documents(
 @router.get("/{document_id}")
 async def get_document(
     document_id: str,
-    organization_id: str,
     version: Optional[int] = None,
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: DocumentService = Depends(get_document_service),
@@ -213,6 +214,8 @@ async def get_document(
     Returns:
         Document details with content metadata
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         doc = service.get_document(document_id, organization_id)
         
@@ -239,7 +242,7 @@ async def get_document(
             "version": version_info,
             "total_versions": doc.version_number,
             "tags": doc.tags or [],
-            "metadata": doc.metadata or {},
+            "metadata": doc.doc_metadata or {},
             "client_id": str(doc.client_id) if doc.client_id else None,
             "property_id": str(doc.property_id) if doc.property_id else None,
             "deal_id": str(doc.deal_id) if doc.deal_id else None,
@@ -263,7 +266,6 @@ async def get_document(
 @router.post("/{document_id}/new-version")
 async def update_document_version(
     document_id: str,
-    organization_id: str,
     file: UploadFile = File(...),
     change_notes: str = "Document updated",
     tags: Optional[List[str]] = None,
@@ -285,6 +287,8 @@ async def update_document_version(
     Returns:
         Updated document with new version
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         # Check auth
         doc = service.get_document(document_id, organization_id)
@@ -328,7 +332,6 @@ async def update_document_version(
 @router.get("/{document_id}/versions")
 async def list_versions(
     document_id: str,
-    organization_id: str,
     limit: int = Query(50, ge=1, le=500),
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: DocumentService = Depends(get_document_service),
@@ -341,6 +344,8 @@ async def list_versions(
     Returns:
         List of all versions with metadata
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         doc = service.get_document(document_id, organization_id)
         
@@ -379,7 +384,6 @@ async def list_versions(
 async def rollback_to_version(
     document_id: str,
     version: int,
-    organization_id: str,
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: DocumentService = Depends(get_document_service),
 ) -> dict:
@@ -396,6 +400,8 @@ async def rollback_to_version(
     Returns:
         Document at rolled-back version
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         doc = service.get_document(document_id, organization_id)
         
@@ -434,7 +440,6 @@ async def rollback_to_version(
 @router.post("/{document_id}/share")
 async def share_document(
     document_id: str,
-    organization_id: str,
     share_with_user_id: Optional[str] = None,
     share_with_email: Optional[str] = None,
     permission: str = "view",
@@ -458,6 +463,8 @@ async def share_document(
     Returns:
         Share confirmation
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         doc = service.get_document(document_id, organization_id)
         
@@ -502,7 +509,6 @@ async def share_document(
 
 @router.get("/admin/shared-with-me")
 async def list_shared_documents(
-    organization_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
@@ -516,6 +522,8 @@ async def list_shared_documents(
     Returns:
         List of documents shared with current user
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         shares, total = service.list_shared_with_me(
             user_id=user_context.user_id,
@@ -552,7 +560,6 @@ async def list_shared_documents(
 @router.post("/{document_id}/retention")
 async def set_retention(
     document_id: str,
-    organization_id: str,
     retention_days: int,
     retention_reason: str = "regulatory",
     user_context: UserContext = Depends(require_role(UserRole.ADMIN)),
@@ -572,6 +579,8 @@ async def set_retention(
     Returns:
         Updated document
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         doc = service.set_retention_policy(
             document_id=document_id,
@@ -597,7 +606,6 @@ async def set_retention(
 
 @router.get("/admin/stats")
 async def get_stats(
-    organization_id: str,
     days: int = Query(30, ge=1, le=365),
     user_context: UserContext = Depends(require_role(UserRole.ADMIN)),
     service: DocumentService = Depends(get_document_service),
@@ -610,6 +618,8 @@ async def get_stats(
     Returns:
         Document usage statistics
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         date_from = datetime.utcnow() - timedelta(days=days)
         stats = service.get_document_stats(organization_id, date_from)
@@ -632,7 +642,6 @@ async def get_stats(
 @router.delete("/{document_id}")
 async def delete_document(
     document_id: str,
-    organization_id: str,
     deletion_reason: str = "user requested",
     user_context: UserContext = Depends(require_role(UserRole.ADMIN)),
     service: DocumentService = Depends(get_document_service),
@@ -650,6 +659,8 @@ async def delete_document(
     Returns:
         Deletion confirmation
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         service.mark_for_deletion(
             document_id=document_id,

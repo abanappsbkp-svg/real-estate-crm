@@ -12,13 +12,13 @@ import logging
 from typing import Optional, Dict, Any
 from datetime import datetime
 import uuid
+from models import as_uuid
 
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker, Session
-from sqlalchemy.pool import NullPool
+from sqlalchemy.orm import Session
 
 import models
 from config import settings
+from db import engine, SessionLocal, get_db, sync_schema, seed_reference_data  # noqa: F401
 
 # ============================================================================
 # Logging Configuration
@@ -29,27 +29,15 @@ logger = logging.getLogger(__name__)
 # ============================================================================
 # Database Setup
 # ============================================================================
-DATABASE_URL = settings.DATABASE_URL
-engine = create_engine(
-    DATABASE_URL,
-    echo=settings.DEBUG,
-    poolclass=NullPool if settings.ENVIRONMENT == "testing" else None,
-)
+# Engine, SessionLocal and get_db live in db.py
 
-SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
-
-# Create tables
+# Create tables (never crash the app if the database is temporarily unreachable)
 try:
-    models.Base.metadata.create_all(bind=engine)
+    sync_schema(models.Base)
+    seed_reference_data()
+    logger.info("✅ Database tables ready")
 except Exception as e:
-    print(f"Warning: Could not initialize database tables on startup: {e}")
-def get_db():
-    """Dependency injection for database session"""
-    db = SessionLocal()
-    try:
-        yield db
-    finally:
-        db.close()
+    logger.warning(f"⚠️ Could not initialize database tables on startup: {e}")
 
 # ============================================================================
 # Middleware: User Context
@@ -92,11 +80,11 @@ class BaseService:
     ):
         """Create an audit log entry"""
         audit_log = models.AuditLog(
-            organization_id=uuid.UUID(organization_id),
-            user_id=uuid.UUID(user_id) if user_id else None,
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id) if user_id else None,
             action=action,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if entity_id else None,
+            entity_id=as_uuid(entity_id) if entity_id else None,
             old_values=old_values,
             new_values=new_values,
             ip_address=ip_address,
@@ -119,8 +107,8 @@ class PropertyService(BaseService):
     ) -> models.Property:
         """Create a new property listing"""
         property_obj = models.Property(
-            organization_id=uuid.UUID(organization_id),
-            listing_agent_id=uuid.UUID(listing_agent_id) if listing_agent_id else None,
+            organization_id=as_uuid(organization_id),
+            listing_agent_id=as_uuid(listing_agent_id) if listing_agent_id else None,
             type=data.type,
             status=data.status.value,
             mls_number=data.mls_number,
@@ -163,7 +151,7 @@ class PropertyService(BaseService):
     ) -> models.Property:
         """Update property status and create audit trail"""
         property_obj = self.db.query(models.Property).filter(
-            models.Property.id == uuid.UUID(property_id)
+            models.Property.id == as_uuid(property_id)
         ).first()
         
         if not property_obj:
@@ -174,8 +162,8 @@ class PropertyService(BaseService):
         
         # Create history entry
         history = models.PropertyHistory(
-            property_id=uuid.UUID(property_id),
-            changed_by=uuid.UUID(changed_by) if changed_by else None,
+            property_id=as_uuid(property_id),
+            changed_by=as_uuid(changed_by) if changed_by else None,
             field_name="status",
             old_value=old_status,
             new_value=new_status.value,
@@ -197,7 +185,7 @@ class PropertyService(BaseService):
     ) -> models.Property:
         """Update property price and track history"""
         property_obj = self.db.query(models.Property).filter(
-            models.Property.id == uuid.UUID(property_id)
+            models.Property.id == as_uuid(property_id)
         ).first()
         
         if not property_obj:
@@ -209,8 +197,8 @@ class PropertyService(BaseService):
         
         # Create history entry
         history = models.PropertyHistory(
-            property_id=uuid.UUID(property_id),
-            changed_by=uuid.UUID(changed_by) if changed_by else None,
+            property_id=as_uuid(property_id),
+            changed_by=as_uuid(changed_by) if changed_by else None,
             field_name="list_price",
             old_value=str(old_price),
             new_value=str(new_price),
@@ -226,7 +214,7 @@ class PropertyService(BaseService):
     def get_property_details(self, property_id: str) -> models.Property:
         """Get full property details with all relationships"""
         return self.db.query(models.Property).filter(
-            models.Property.id == uuid.UUID(property_id),
+            models.Property.id == as_uuid(property_id),
             models.Property.deleted_at.is_(None),
         ).first()
     
@@ -243,7 +231,7 @@ class PropertyService(BaseService):
     ) -> tuple[list, int]:
         """Search properties with filters"""
         query = self.db.query(models.Property).filter(
-            models.Property.organization_id == uuid.UUID(organization_id),
+            models.Property.organization_id == as_uuid(organization_id),
             models.Property.deleted_at.is_(None),
         )
         
@@ -277,7 +265,7 @@ class ClientService(BaseService):
     ) -> models.Client:
         """Create a new client/lead"""
         client = models.Client(
-            organization_id=uuid.UUID(organization_id),
+            organization_id=as_uuid(organization_id),
             first_name=data.first_name,
             last_name=data.last_name,
             email=data.email,
@@ -291,7 +279,7 @@ class ClientService(BaseService):
             location_preferences=data.location_preferences or {},
             preferred_contact_method=data.preferred_contact_method,
             preferred_language=data.preferred_language,
-            assigned_agent_id=uuid.UUID(assigned_agent_id) if assigned_agent_id else None,
+            assigned_agent_id=as_uuid(assigned_agent_id) if assigned_agent_id else None,
         )
         self.db.add(client)
         self.db.commit()
@@ -322,20 +310,20 @@ class ClientService(BaseService):
     ) -> models.ClientInteraction:
         """Log a client interaction"""
         interaction = models.ClientInteraction(
-            client_id=uuid.UUID(client_id),
-            organization_id=uuid.UUID(organization_id),
-            agent_id=uuid.UUID(agent_id),
+            client_id=as_uuid(client_id),
+            organization_id=as_uuid(organization_id),
+            agent_id=as_uuid(agent_id),
             interaction_type=interaction_type.value,
             subject=subject,
             content=content,
-            property_id=uuid.UUID(property_id) if property_id else None,
+            property_id=as_uuid(property_id) if property_id else None,
             duration_seconds=duration_seconds,
         )
         self.db.add(interaction)
         
         # Update client's last contacted date
         client = self.db.query(models.Client).filter(
-            models.Client.id == uuid.UUID(client_id)
+            models.Client.id == as_uuid(client_id)
         ).first()
         if client:
             client.last_contacted = datetime.utcnow()
@@ -352,7 +340,7 @@ class ClientService(BaseService):
     ) -> list[models.PropertyMatch]:
         """Find properties matching client preferences"""
         client = self.db.query(models.Client).filter(
-            models.Client.id == uuid.UUID(client_id)
+            models.Client.id == as_uuid(client_id)
         ).first()
         
         if not client:
@@ -387,7 +375,7 @@ class ClientService(BaseService):
             match_score = self._calculate_match_score(client, prop)
             
             existing_match = self.db.query(models.PropertyMatch).filter(
-                models.PropertyMatch.client_id == uuid.UUID(client_id),
+                models.PropertyMatch.client_id == as_uuid(client_id),
                 models.PropertyMatch.property_id == prop.id,
             ).first()
             
@@ -396,7 +384,7 @@ class ClientService(BaseService):
                 existing_match.updated_at = datetime.utcnow()
             else:
                 existing_match = models.PropertyMatch(
-                    client_id=uuid.UUID(client_id),
+                    client_id=as_uuid(client_id),
                     property_id=prop.id,
                     match_score=match_score,
                     match_reason=self._get_match_reasons(client, prop),
@@ -478,10 +466,10 @@ class DealService(BaseService):
     ) -> models.Deal:
         """Create a new deal"""
         deal = models.Deal(
-            organization_id=uuid.UUID(organization_id),
-            client_id=uuid.UUID(data.client_id),
-            property_id=uuid.UUID(data.property_id),
-            agent_id=uuid.UUID(agent_id),
+            organization_id=as_uuid(organization_id),
+            client_id=as_uuid(data.client_id),
+            property_id=as_uuid(data.property_id),
+            agent_id=as_uuid(agent_id),
             deal_type=data.deal_type,
             stage=data.stage.value,
             proposed_price=data.proposed_price,
@@ -497,7 +485,7 @@ class DealService(BaseService):
         stage_history = models.DealStageHistory(
             deal_id=deal.id,
             to_stage=data.stage.value,
-            changed_by=uuid.UUID(agent_id),
+            changed_by=as_uuid(agent_id),
         )
         self.db.add(stage_history)
         self.db.commit()
@@ -523,7 +511,7 @@ class DealService(BaseService):
     ) -> models.Deal:
         """Move deal to next stage"""
         deal = self.db.query(models.Deal).filter(
-            models.Deal.id == uuid.UUID(deal_id)
+            models.Deal.id == as_uuid(deal_id)
         ).first()
         
         if not deal:
@@ -538,7 +526,7 @@ class DealService(BaseService):
             deal_id=deal.id,
             from_stage=old_stage,
             to_stage=new_stage.value,
-            changed_by=uuid.UUID(changed_by),
+            changed_by=as_uuid(changed_by),
             reason=reason,
         )
         self.db.add(stage_history)
@@ -561,7 +549,7 @@ class DealService(BaseService):
     def get_pipeline_stats(self, organization_id: str) -> Dict[str, Any]:
         """Get pipeline statistics"""
         deals = self.db.query(models.Deal).filter(
-            models.Deal.organization_id == uuid.UUID(organization_id),
+            models.Deal.organization_id == as_uuid(organization_id),
             models.Deal.is_active == True,
         ).all()
         
@@ -609,10 +597,10 @@ class CallLogService(BaseService):
     ) -> models.CallLog:
         """Create a call log entry"""
         call_log = models.CallLog(
-            organization_id=uuid.UUID(organization_id),
-            client_id=uuid.UUID(client_id) if client_id else None,
-            property_id=uuid.UUID(property_id) if property_id else None,
-            agent_id=uuid.UUID(agent_id),
+            organization_id=as_uuid(organization_id),
+            client_id=as_uuid(client_id) if client_id else None,
+            property_id=as_uuid(property_id) if property_id else None,
+            agent_id=as_uuid(agent_id),
             call_type=call_type.value,
             phone_number=phone_number,
             duration_seconds=duration_seconds,
@@ -657,7 +645,8 @@ def create_app() -> FastAPI:
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.ALLOWED_ORIGINS,
-        allow_credentials=True,
+        # Browsers refuse credentials with a wildcard origin, so only enable them for explicit origins
+        allow_credentials="*" not in settings.ALLOWED_ORIGINS,
         allow_methods=["*"],
         allow_headers=["*"],
     )
@@ -690,58 +679,31 @@ def create_app() -> FastAPI:
     # Authentication Middleware
     # ========================================================================
 
-    # from middleware_auth import attach_user_context  # TODO: Fix HTTPCredentials import
-
-
     # ========================================================================
     # API Routes
     # ========================================================================
     
-    # Authentication routes
+    # Load every router. A broken optional module is logged loudly but does not
+    # take the whole API down; authentication is required, so it is not guarded.
     import routers_auth
     app.include_router(routers_auth.router, prefix="/api/v1")
     logger.info("✅ Authentication routes loaded")
-    
-    # Properties routes
-    try:
-        import routers_properties
-        app.include_router(routers_properties.router, prefix="/api/v1")
-        logger.info("✅ Properties routes loaded")
-    except ImportError as e:
-        logger.warning(f"⚠️ Properties routes unavailable: {e}")
-    
-    # Clients routes
-    try:
-        import routers_clients
-        app.include_router(routers_clients.router, prefix="/api/v1")
-        logger.info("✅ Clients routes loaded")
-    except ImportError as e:
-        logger.warning(f"⚠️ Clients routes unavailable: {e}")
-    
-    # Deals routes
-    try:
-        import routers_deals
-        app.include_router(routers_deals.router, prefix="/api/v1")
-        logger.info("✅ Deals routes loaded")
-    except ImportError as e:
-        logger.warning(f"⚠️ Deals routes unavailable: {e}")
-    
-    # Call Logs routes (Phase 5)
-    try:
-        import routers_calls
-        app.include_router(routers_calls.router, prefix="/api/v1")
-        logger.info("✅ Call Logging routes loaded")
-    except ImportError as e:
-        logger.warning(f"⚠️ Call Logging routes unavailable: {e}")
-    
-    # Document Management routes (Phase 5 continued)
-    try:
-        import routers_documents
-        app.include_router(routers_documents.router, prefix="/api/v1")
-        logger.info("✅ Document Management routes loaded")
-    except ImportError as e:
-        logger.warning(f"⚠️ Document Management routes unavailable: {e}")
-    
+
+    import importlib
+    for module_name, label in [
+        ("routers_properties", "Properties"),
+        ("routers_clients", "Clients"),
+        ("routers_deals", "Deals"),
+        ("routers_calls", "Call Logging"),
+        ("routers_documents", "Document Management"),
+    ]:
+        try:
+            module = importlib.import_module(module_name)
+            app.include_router(module.router, prefix="/api/v1")
+            logger.info(f"✅ {label} routes loaded")
+        except Exception as e:  # catch everything, not only ImportError
+            logger.error(f"❌ {label} routes failed to load: {e!r}", exc_info=True)
+
     # TODO: Import other routers as they're created
     # Notifications, Advanced Reporting coming in Phase 5-6
     
@@ -752,10 +714,7 @@ def create_app() -> FastAPI:
 # ============================================================================
 app = create_app()
 
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    return await call_next(request)
-
 if __name__ == "__main__":
+    import os
     import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000, reload=settings.DEBUG)
+    uvicorn.run("main:app", host="0.0.0.0", port=int(os.getenv("PORT", "8000")))

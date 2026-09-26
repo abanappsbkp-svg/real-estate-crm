@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 import uuid
+from models import as_uuid
 import mimetypes
 import os
 
@@ -68,17 +69,17 @@ class DocumentService:
             mime_type = mime_type or "application/octet-stream"
         
         document = Document(
-            organization_id=uuid.UUID(organization_id),
-            created_by=uuid.UUID(created_by),
+            organization_id=as_uuid(organization_id),
+            created_by=as_uuid(created_by),
             name=name,
             document_type=document_type,
             mime_type=mime_type,
             file_size=file_size or len(content),
-            client_id=uuid.UUID(client_id) if client_id else None,
-            property_id=uuid.UUID(property_id) if property_id else None,
-            deal_id=uuid.UUID(deal_id) if deal_id else None,
+            client_id=as_uuid(client_id) if client_id else None,
+            property_id=as_uuid(property_id) if property_id else None,
+            deal_id=as_uuid(deal_id) if deal_id else None,
             tags=tags or [],
-            metadata=metadata or {},
+            doc_metadata=metadata or {},
             storage_location=storage_location,
             version_number=1,
         )
@@ -90,7 +91,7 @@ class DocumentService:
         version = DocumentVersion(
             document_id=document.id,
             version_number=1,
-            created_by=uuid.UUID(created_by),
+            created_by=as_uuid(created_by),
             content=content,
             mime_type=mime_type,
             file_size=file_size or len(content),
@@ -129,12 +130,12 @@ class DocumentService:
     ) -> Optional[Document]:
         """Get document by ID"""
         query = self.db.query(Document).filter(
-            Document.id == uuid.UUID(document_id),
+            Document.id == as_uuid(document_id),
             Document.deleted_at.is_(None),
         )
         
         if organization_id:
-            query = query.filter(Document.organization_id == uuid.UUID(organization_id))
+            query = query.filter(Document.organization_id == as_uuid(organization_id))
         
         return query.first()
     
@@ -178,7 +179,7 @@ class DocumentService:
             Tuple of (documents list, total count)
         """
         query = self.db.query(Document).filter(
-            Document.organization_id == uuid.UUID(organization_id),
+            Document.organization_id == as_uuid(organization_id),
             Document.deleted_at.is_(None),
         )
         
@@ -187,16 +188,16 @@ class DocumentService:
             query = query.filter(Document.document_type == document_type)
         
         if client_id:
-            query = query.filter(Document.client_id == uuid.UUID(client_id))
+            query = query.filter(Document.client_id == as_uuid(client_id))
         
         if property_id:
-            query = query.filter(Document.property_id == uuid.UUID(property_id))
+            query = query.filter(Document.property_id == as_uuid(property_id))
         
         if deal_id:
-            query = query.filter(Document.deal_id == uuid.UUID(deal_id))
+            query = query.filter(Document.deal_id == as_uuid(deal_id))
         
         if created_by:
-            query = query.filter(Document.created_by == uuid.UUID(created_by))
+            query = query.filter(Document.created_by == as_uuid(created_by))
         
         if date_from:
             query = query.filter(Document.created_at >= date_from)
@@ -242,7 +243,7 @@ class DocumentService:
     ) -> Optional[DocumentVersion]:
         """Get specific document version"""
         return self.db.query(DocumentVersion).filter(
-            DocumentVersion.document_id == uuid.UUID(document_id),
+            DocumentVersion.document_id == as_uuid(document_id),
             DocumentVersion.version_number == version_number,
         ).first()
     
@@ -253,7 +254,7 @@ class DocumentService:
     ) -> List[DocumentVersion]:
         """Get all versions of a document"""
         return self.db.query(DocumentVersion).filter(
-            DocumentVersion.document_id == uuid.UUID(document_id)
+            DocumentVersion.document_id == as_uuid(document_id)
         ).order_by(DocumentVersion.version_number.desc()).limit(limit).all()
     
     # ========================================================================
@@ -292,13 +293,13 @@ class DocumentService:
         
         # Update document metadata
         document.updated_at = datetime.utcnow()
-        document.updated_by = uuid.UUID(updated_by)
+        document.updated_by = as_uuid(updated_by)
         
         if tags is not None:
             document.tags = tags
         
         if metadata is not None:
-            document.metadata = metadata
+            document.doc_metadata = metadata
         
         # Increment version number
         new_version_number = document.version_number + 1
@@ -306,9 +307,9 @@ class DocumentService:
         
         # Create new version
         version = DocumentVersion(
-            document_id=uuid.UUID(document_id),
+            document_id=as_uuid(document_id),
             version_number=new_version_number,
-            created_by=uuid.UUID(updated_by),
+            created_by=as_uuid(updated_by),
             content=content,
             mime_type=document.mime_type,
             file_size=len(content),
@@ -368,9 +369,9 @@ class DocumentService:
         new_version_number = document.version_number + 1
         
         version = DocumentVersion(
-            document_id=uuid.UUID(document_id),
+            document_id=as_uuid(document_id),
             version_number=new_version_number,
-            created_by=uuid.UUID(rolled_back_by),
+            created_by=as_uuid(rolled_back_by),
             content=target.content,
             mime_type=target.mime_type,
             file_size=target.file_size,
@@ -379,7 +380,7 @@ class DocumentService:
         
         document.version_number = new_version_number
         document.updated_at = datetime.utcnow()
-        document.updated_by = uuid.UUID(rolled_back_by)
+        document.updated_by = as_uuid(rolled_back_by)
         
         self.db.add(version)
         self.db.commit()
@@ -433,10 +434,10 @@ class DocumentService:
             raise ValueError("Either user_id or email must be provided")
         
         share = DocumentShare(
-            document_id=uuid.UUID(document_id),
-            organization_id=uuid.UUID(organization_id),
-            shared_by=uuid.UUID(shared_by),
-            share_with_user_id=uuid.UUID(share_with_user_id) if share_with_user_id else None,
+            document_id=as_uuid(document_id),
+            organization_id=as_uuid(organization_id),
+            shared_by=as_uuid(shared_by),
+            share_with_user_id=as_uuid(share_with_user_id) if share_with_user_id else None,
             share_with_email=share_with_email,
             permission=permission,
             expiry_date=expiry_date,
@@ -470,8 +471,8 @@ class DocumentService:
     ) -> tuple[List[DocumentShare], int]:
         """Get documents shared with me"""
         query = self.db.query(DocumentShare).filter(
-            DocumentShare.share_with_user_id == uuid.UUID(user_id),
-            DocumentShare.organization_id == uuid.UUID(organization_id),
+            DocumentShare.share_with_user_id == as_uuid(user_id),
+            DocumentShare.organization_id == as_uuid(organization_id),
             or_(
                 DocumentShare.expiry_date.is_(None),
                 DocumentShare.expiry_date > datetime.utcnow(),
@@ -491,8 +492,8 @@ class DocumentService:
     ) -> bool:
         """Revoke document share"""
         share = self.db.query(DocumentShare).filter(
-            DocumentShare.id == uuid.UUID(share_id),
-            DocumentShare.organization_id == uuid.UUID(organization_id),
+            DocumentShare.id == as_uuid(share_id),
+            DocumentShare.organization_id == as_uuid(organization_id),
         ).first()
         
         if not share:
@@ -557,7 +558,7 @@ class DocumentService:
         cutoff = datetime.utcnow() + timedelta(days=days_until_expiry)
         
         return self.db.query(Document).filter(
-            Document.organization_id == uuid.UUID(organization_id),
+            Document.organization_id == as_uuid(organization_id),
             Document.retention_until.isnot(None),
             Document.retention_until <= cutoff,
             Document.deleted_at.is_(None),
@@ -577,7 +578,7 @@ class DocumentService:
             raise ValueError("Document not found")
         
         document.deleted_at = datetime.utcnow()
-        document.deleted_by = uuid.UUID(marked_by)
+        document.deleted_by = as_uuid(marked_by)
         self.db.commit()
         self.db.refresh(document)
         
@@ -607,7 +608,7 @@ class DocumentService:
             date_from = datetime.utcnow() - timedelta(days=30)
         
         query = self.db.query(Document).filter(
-            Document.organization_id == uuid.UUID(organization_id),
+            Document.organization_id == as_uuid(organization_id),
             Document.created_at >= date_from,
             Document.deleted_at.is_(None),
         )
@@ -660,11 +661,11 @@ class DocumentService:
     ):
         """Log audit trail entry"""
         audit_log = AuditLog(
-            organization_id=uuid.UUID(organization_id),
-            user_id=uuid.UUID(user_id) if user_id else None,
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id) if user_id else None,
             action=action,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if entity_id else None,
+            entity_id=as_uuid(entity_id) if entity_id else None,
             old_values=old_values,
             new_values=new_values,
         )

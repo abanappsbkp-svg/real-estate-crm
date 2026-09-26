@@ -14,13 +14,14 @@ from middleware_auth import (
 )
 from services_clients import ClientService
 from models import User, UserRole
+from models import APIModel
 from db import get_db
 
 # ============================================================================
 # Pydantic Models
 # ============================================================================
 
-class PreferencesRequest(BaseModel):
+class PreferencesRequest(APIModel):
     budget_min: Optional[float] = Field(None, gt=0)
     budget_max: Optional[float] = Field(None, gt=0)
     property_types: Optional[List[str]] = None
@@ -28,36 +29,36 @@ class PreferencesRequest(BaseModel):
     bathrooms: Optional[float] = Field(None, ge=0)
     location_preferences: Optional[Dict[str, Any]] = None
 
-class CreateClientRequest(BaseModel):
+class CreateClientRequest(APIModel):
     email: EmailStr
     first_name: str = Field(..., min_length=1, max_length=100)
     last_name: str = Field(..., min_length=1, max_length=100)
     phone: Optional[str] = None
-    client_type: str = Field(default="buyer", regex="^(buyer|seller|both)$")
-    status: str = Field(default="active", regex="^(active|inactive|archived)$")
+    client_type: str = Field(default="buyer", pattern="^(buyer|seller|both)$")
+    status: str = Field(default="active", pattern="^(active|inactive|archived)$")
     preferences: Optional[PreferencesRequest] = None
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
 
-class UpdateClientRequest(BaseModel):
+class UpdateClientRequest(APIModel):
     first_name: Optional[str] = Field(None, min_length=1, max_length=100)
     last_name: Optional[str] = Field(None, min_length=1, max_length=100)
     phone: Optional[str] = None
     email: Optional[EmailStr] = None
-    client_type: Optional[str] = Field(None, regex="^(buyer|seller|both)$")
-    status: Optional[str] = Field(None, regex="^(active|inactive|archived)$")
+    client_type: Optional[str] = Field(None, pattern="^(buyer|seller|both)$")
+    status: Optional[str] = Field(None, pattern="^(active|inactive|archived)$")
     notes: Optional[str] = None
     custom_fields: Optional[Dict[str, Any]] = None
 
-class InteractionRequest(BaseModel):
-    interaction_type: str = Field(..., regex="^(call|email|meeting|showing|offer)$")
+class InteractionRequest(APIModel):
+    interaction_type: str = Field(..., pattern="^(call|email|meeting|showing|offer)$")
     description: Optional[str] = None
     property_id: Optional[str] = None
     notes: Optional[str] = None
     duration_minutes: Optional[int] = Field(None, ge=1)
     follow_up_date: Optional[datetime] = None
 
-class ClientInteractionResponse(BaseModel):
+class ClientInteractionResponse(APIModel):
     id: str
     client_id: str
     user_id: str
@@ -72,7 +73,7 @@ class ClientInteractionResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class ClientResponse(BaseModel):
+class ClientResponse(APIModel):
     id: str
     organization_id: str
     email: str
@@ -96,13 +97,13 @@ class ClientResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class ClientListResponse(BaseModel):
+class ClientListResponse(APIModel):
     clients: List[ClientResponse]
     total: int
     skip: int
     limit: int
 
-class PropertyMatchResponse(BaseModel):
+class PropertyMatchResponse(APIModel):
     id: str
     client_id: str
     property_id: str
@@ -114,7 +115,7 @@ class PropertyMatchResponse(BaseModel):
     class Config:
         from_attributes = True
 
-class ClientStatsResponse(BaseModel):
+class ClientStatsResponse(APIModel):
     total_clients: int
     buyers: int
     sellers: int
@@ -217,11 +218,11 @@ async def create_client(
 async def list_clients(
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=100),
-    client_type: Optional[str] = Query(None, regex="^(buyer|seller|both)?$"),
-    status: Optional[str] = Query(None, regex="^(active|inactive|archived)?$"),
+    client_type: Optional[str] = Query(None, pattern="^(buyer|seller|both)?$"),
+    status: Optional[str] = Query(None, pattern="^(active|inactive|archived)?$"),
     search: Optional[str] = Query(None, description="Search by name or email"),
-    sort_by: str = Query("created_at", regex="^(created_at|name|last_interaction)$"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|name|last_interaction)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     current_user: UserContext = Depends(get_current_user),
     db: Session = Depends(get_db),
 ) -> ClientListResponse:

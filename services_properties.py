@@ -6,8 +6,9 @@ Business logic for property management, search, and lifecycle
 from typing import Optional, List, Dict, Any
 from datetime import datetime
 from sqlalchemy.orm import Session
-from sqlalchemy import and_, or_, func
+from sqlalchemy import and_, or_, func, cast, Text
 import uuid
+from models import as_uuid
 
 from models import (
     Property, PropertyStatus, PropertyHistory, Organization,
@@ -64,8 +65,8 @@ class PropertyService:
             Created Property object
         """
         property_obj = Property(
-            organization_id=uuid.UUID(organization_id),
-            listing_agent_id=uuid.UUID(listing_agent_id),
+            organization_id=as_uuid(organization_id),
+            listing_agent_id=as_uuid(listing_agent_id),
             address=address,
             type=property_type,
             status=status,
@@ -111,12 +112,12 @@ class PropertyService:
     def get_property(self, property_id: str, organization_id: Optional[str] = None) -> Optional[Property]:
         """Get property by ID"""
         query = self.db.query(Property).filter(
-            Property.id == uuid.UUID(property_id),
+            Property.id == as_uuid(property_id),
             Property.deleted_at.is_(None),
         )
         
         if organization_id:
-            query = query.filter(Property.organization_id == uuid.UUID(organization_id))
+            query = query.filter(Property.organization_id == as_uuid(organization_id))
         
         return query.first()
     
@@ -156,7 +157,7 @@ class PropertyService:
             Tuple of (properties list, total count)
         """
         query = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.deleted_at.is_(None),
         )
         
@@ -310,8 +311,8 @@ class PropertyService:
         
         # Create status history record
         history = PropertyHistory(
-            property_id=uuid.UUID(property_id),
-            changed_by_id=uuid.UUID(user_id),
+            property_id=as_uuid(property_id),
+            changed_by_id=as_uuid(user_id),
             status_from=old_status,
             status_to=new_status,
             reason=notes,
@@ -398,7 +399,7 @@ class PropertyService:
     ):
         """Add entry to property price history"""
         property_obj = self.db.query(Property).filter(
-            Property.id == uuid.UUID(property_id)
+            Property.id == as_uuid(property_id)
         ).first()
         
         if not property_obj:
@@ -420,7 +421,7 @@ class PropertyService:
     def get_price_history(self, property_id: str) -> List[Dict[str, Any]]:
         """Get property price history"""
         property_obj = self.db.query(Property).filter(
-            Property.id == uuid.UUID(property_id)
+            Property.id == as_uuid(property_id)
         ).first()
         
         if not property_obj or not property_obj.price_history:
@@ -453,11 +454,11 @@ class PropertyService:
         search_term = f"%{query}%"
         
         properties = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.deleted_at.is_(None),
             or_(
                 Property.description.ilike(search_term),
-                func.jsonb_to_text(Property.address).ilike(search_term),
+                cast(Property.address, Text).ilike(search_term),
             ),
         ).limit(limit).all()
         
@@ -494,8 +495,8 @@ class PropertyService:
         city = property_obj.address.get("city", "")
         
         similar = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
-            Property.id != uuid.UUID(property_id),
+            Property.organization_id == as_uuid(organization_id),
+            Property.id != as_uuid(property_id),
             Property.type == property_obj.type,
             Property.list_price.between(min_price, max_price),
             func.lower(Property.address["city"].astext) == city.lower(),
@@ -550,8 +551,8 @@ class PropertyService:
     def restore_property(self, property_id: str, organization_id: str) -> Property:
         """Restore a soft-deleted property"""
         property_obj = self.db.query(Property).filter(
-            Property.id == uuid.UUID(property_id),
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.id == as_uuid(property_id),
+            Property.organization_id == as_uuid(organization_id),
         ).first()
         
         if not property_obj:
@@ -576,7 +577,7 @@ class PropertyService:
     ):
         """Add photo to property"""
         property_obj = self.db.query(Property).filter(
-            Property.id == uuid.UUID(property_id)
+            Property.id == as_uuid(property_id)
         ).first()
         
         if not property_obj:
@@ -606,7 +607,7 @@ class PropertyService:
     def get_photos(self, property_id: str) -> List[Dict[str, Any]]:
         """Get property photos"""
         property_obj = self.db.query(Property).filter(
-            Property.id == uuid.UUID(property_id)
+            Property.id == as_uuid(property_id)
         ).first()
         
         if not property_obj or not property_obj.custom_fields:
@@ -621,7 +622,7 @@ class PropertyService:
     def get_property_history(self, property_id: str) -> List[PropertyHistory]:
         """Get property status change history"""
         return self.db.query(PropertyHistory).filter(
-            PropertyHistory.property_id == uuid.UUID(property_id)
+            PropertyHistory.property_id == as_uuid(property_id)
         ).order_by(PropertyHistory.changed_at.desc()).all()
     
     def get_audit_log(
@@ -631,7 +632,7 @@ class PropertyService:
     ) -> List[AuditLog]:
         """Get audit log for property"""
         return self.db.query(AuditLog).filter(
-            AuditLog.entity_id == uuid.UUID(property_id),
+            AuditLog.entity_id == as_uuid(property_id),
             AuditLog.entity_type == "property",
         ).order_by(AuditLog.created_at.desc()).limit(limit).all()
     
@@ -642,31 +643,31 @@ class PropertyService:
     def get_property_stats(self, organization_id: str) -> Dict[str, Any]:
         """Get property statistics for organization"""
         total = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.deleted_at.is_(None),
         ).count()
         
         available = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.status == PropertyStatus.AVAILABLE.value,
             Property.deleted_at.is_(None),
         ).count()
         
         pending = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.status == PropertyStatus.PENDING.value,
             Property.deleted_at.is_(None),
         ).count()
         
         sold = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.status == PropertyStatus.SOLD.value,
             Property.deleted_at.is_(None),
         ).count()
         
         # Average price
         avg_price_result = self.db.query(func.avg(Property.list_price)).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.deleted_at.is_(None),
         ).first()
         
@@ -700,11 +701,11 @@ class PropertyService:
     ):
         """Log audit trail entry"""
         audit_log = AuditLog(
-            organization_id=uuid.UUID(organization_id),
-            user_id=uuid.UUID(user_id) if user_id else None,
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id) if user_id else None,
             action=action,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if entity_id else None,
+            entity_id=as_uuid(entity_id) if entity_id else None,
             old_values=old_values,
             new_values=new_values,
             status=status,

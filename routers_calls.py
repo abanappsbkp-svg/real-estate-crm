@@ -9,7 +9,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query, status
 from sqlalchemy.orm import Session
 import logging
 
-from config import get_db
+from db import get_db
 from models import CallLog, User, UserRole
 from services_calls import CallLogService
 from middleware_auth import require_role, get_current_user, UserContext
@@ -33,9 +33,8 @@ def get_call_service(db: Session = Depends(get_db)) -> CallLogService:
 @router.post("/log")
 async def log_call(
     call_type: str,
-    agent_id: str,
     duration_seconds: int,
-    organization_id: str,
+    agent_id: Optional[str] = None,  # defaults to the logged-in user
     client_id: Optional[str] = None,
     property_id: Optional[str] = None,
     phone_number: Optional[str] = None,
@@ -65,6 +64,9 @@ async def log_call(
     Returns:
         Created call object
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
+    agent_id = agent_id or user_context.user_id
     try:
         # Authorization check
         if user_context.role == UserRole.AGENT and user_context.user_id != agent_id:
@@ -111,7 +113,6 @@ async def log_call(
 
 @router.get("")
 async def list_calls(
-    organization_id: str,
     skip: int = Query(0, ge=0),
     limit: int = Query(50, ge=1, le=500),
     agent_id: Optional[str] = None,
@@ -120,8 +121,8 @@ async def list_calls(
     call_type: Optional[str] = None,
     date_from: Optional[str] = None,  # ISO format
     date_to: Optional[str] = None,  # ISO format
-    sort_by: str = Query("created_at", regex="^(created_at|duration_seconds)$"),
-    sort_order: str = Query("desc", regex="^(asc|desc)$"),
+    sort_by: str = Query("created_at", pattern="^(created_at|duration_seconds)$"),
+    sort_order: str = Query("desc", pattern="^(asc|desc)$"),
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: CallLogService = Depends(get_call_service),
 ) -> dict:
@@ -145,6 +146,8 @@ async def list_calls(
     Returns:
         Paginated list of calls
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         # Authorization check: agents can only see their own calls
         if user_context.role == UserRole.AGENT and agent_id and user_context.user_id != agent_id:
@@ -220,7 +223,6 @@ async def list_calls(
 @router.get("/{call_id}")
 async def get_call(
     call_id: str,
-    organization_id: str,
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: CallLogService = Depends(get_call_service),
 ) -> dict:
@@ -229,6 +231,8 @@ async def get_call(
     
     **Authorization:** Agent (own calls) or Admin
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         call = service.get_call(call_id, organization_id)
         
@@ -275,7 +279,6 @@ async def get_call(
 @router.post("/{call_id}/transcript")
 async def add_transcript(
     call_id: str,
-    organization_id: str,
     transcript: str,
     transcript_provider: str = "manual",
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
@@ -295,6 +298,8 @@ async def add_transcript(
     Returns:
         Updated call object
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         call = service.get_call(call_id, organization_id)
         
@@ -340,7 +345,6 @@ async def add_transcript(
 @router.post("/{call_id}/summary")
 async def add_summary(
     call_id: str,
-    organization_id: str,
     summary: str,
     key_topics: Optional[List[str]] = None,
     sentiment_label: Optional[str] = None,
@@ -366,6 +370,8 @@ async def add_summary(
     Returns:
         Updated call object
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         call = service.get_call(call_id, organization_id)
         
@@ -420,7 +426,6 @@ async def add_summary(
 @router.post("/{call_id}/action-items")
 async def add_action_items(
     call_id: str,
-    organization_id: str,
     action_items: List[str],
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: CallLogService = Depends(get_call_service),
@@ -438,6 +443,8 @@ async def add_action_items(
     Returns:
         Updated call object
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         call = service.get_call(call_id, organization_id)
         
@@ -472,7 +479,6 @@ async def add_action_items(
 
 @router.get("/admin/stats")
 async def get_call_stats(
-    organization_id: str,
     agent_id: Optional[str] = None,
     days: int = Query(30, ge=1, le=365),
     user_context: UserContext = Depends(require_role(UserRole.ADMIN)),
@@ -490,6 +496,8 @@ async def get_call_stats(
     Returns:
         Call statistics including totals, averages, and breakdowns
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         date_from = datetime.utcnow() - timedelta(days=days)
         
@@ -517,7 +525,6 @@ async def get_call_stats(
 @router.get("/client/{client_id}/history")
 async def get_client_calls(
     client_id: str,
-    organization_id: str,
     limit: int = Query(50, ge=1, le=500),
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: CallLogService = Depends(get_call_service),
@@ -527,6 +534,8 @@ async def get_client_calls(
     
     **Authorization:** Agent (if client assigned) or Admin
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         calls = service.get_client_call_history(client_id, limit)
         
@@ -558,7 +567,6 @@ async def get_client_calls(
 @router.get("/property/{property_id}/history")
 async def get_property_calls(
     property_id: str,
-    organization_id: str,
     limit: int = Query(50, ge=1, le=500),
     user_context: UserContext = Depends(require_role(UserRole.AGENT)),
     service: CallLogService = Depends(get_call_service),
@@ -568,6 +576,8 @@ async def get_property_calls(
     
     **Authorization:** Agent or Admin
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         calls = service.get_property_call_history(property_id, limit)
         
@@ -599,7 +609,6 @@ async def get_property_calls(
 @router.delete("/{call_id}")
 async def delete_call(
     call_id: str,
-    organization_id: str,
     reason: Optional[str] = None,
     user_context: UserContext = Depends(require_role(UserRole.ADMIN)),
     service: CallLogService = Depends(get_call_service),
@@ -617,6 +626,8 @@ async def delete_call(
     Returns:
         Success response
     """
+    # Always use the logged-in user's organization (prevents cross-organization access)
+    organization_id = str(user_context.organization_id)
     try:
         success = service.delete_call(
             call_id=call_id,

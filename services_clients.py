@@ -8,6 +8,7 @@ from datetime import datetime, timedelta
 from sqlalchemy.orm import Session
 from sqlalchemy import and_, or_, func
 import uuid
+from models import as_uuid
 
 from models import (
     Client, ClientInteraction, InteractionType, PropertyMatch,
@@ -66,8 +67,8 @@ class ClientService:
             Created Client object
         """
         client = Client(
-            organization_id=uuid.UUID(organization_id),
-            created_by_id=uuid.UUID(created_by_id),
+            organization_id=as_uuid(organization_id),
+            created_by_id=as_uuid(created_by_id),
             email=email.lower(),
             first_name=first_name,
             last_name=last_name,
@@ -114,12 +115,12 @@ class ClientService:
     ) -> Optional[Client]:
         """Get client by ID"""
         query = self.db.query(Client).filter(
-            Client.id == uuid.UUID(client_id),
+            Client.id == as_uuid(client_id),
             Client.deleted_at.is_(None),
         )
         
         if organization_id:
-            query = query.filter(Client.organization_id == uuid.UUID(organization_id))
+            query = query.filter(Client.organization_id == as_uuid(organization_id))
         
         return query.first()
     
@@ -153,7 +154,7 @@ class ClientService:
             Tuple of (clients list, total count)
         """
         query = self.db.query(Client).filter(
-            Client.organization_id == uuid.UUID(organization_id),
+            Client.organization_id == as_uuid(organization_id),
             Client.deleted_at.is_(None),
         )
         
@@ -165,7 +166,7 @@ class ClientService:
             query = query.filter(Client.status == status)
         
         if created_by_id:
-            query = query.filter(Client.created_by_id == uuid.UUID(created_by_id))
+            query = query.filter(Client.created_by_id == as_uuid(created_by_id))
         
         if search_query:
             search_term = f"%{search_query}%"
@@ -294,11 +295,12 @@ class ClientService:
             Created ClientInteraction object
         """
         interaction = ClientInteraction(
-            client_id=uuid.UUID(client_id),
-            user_id=uuid.UUID(user_id),
+            client_id=as_uuid(client_id),
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id),
             type=interaction_type,
             description=description,
-            property_id=uuid.UUID(property_id) if property_id else None,
+            property_id=as_uuid(property_id) if property_id else None,
             notes=notes,
             duration_minutes=duration_minutes,
             follow_up_date=follow_up_date,
@@ -338,7 +340,7 @@ class ClientService:
     ) -> List[ClientInteraction]:
         """Get client's interaction history"""
         query = self.db.query(ClientInteraction).filter(
-            ClientInteraction.client_id == uuid.UUID(client_id)
+            ClientInteraction.client_id == as_uuid(client_id)
         )
         
         if interaction_type:
@@ -361,7 +363,7 @@ class ClientService:
         )
         
         if user_id:
-            query = query.filter(ClientInteraction.user_id == uuid.UUID(user_id))
+            query = query.filter(ClientInteraction.user_id == as_uuid(user_id))
         
         return query.order_by(ClientInteraction.follow_up_date.asc()).all()
     
@@ -426,7 +428,7 @@ class ClientService:
         
         # Build query for matching properties
         query = self.db.query(Property).filter(
-            Property.organization_id == uuid.UUID(organization_id),
+            Property.organization_id == as_uuid(organization_id),
             Property.status == "available",
             Property.deleted_at.is_(None),
         )
@@ -470,7 +472,7 @@ class ClientService:
             match_score = self._calculate_match_score(client, prop)
             
             existing_match = self.db.query(PropertyMatch).filter(
-                PropertyMatch.client_id == uuid.UUID(client_id),
+                PropertyMatch.client_id == as_uuid(client_id),
                 PropertyMatch.property_id == prop.id,
             ).first()
             
@@ -479,7 +481,7 @@ class ClientService:
                 existing_match.updated_at = datetime.utcnow()
             else:
                 existing_match = PropertyMatch(
-                    client_id=uuid.UUID(client_id),
+                    client_id=as_uuid(client_id),
                     property_id=prop.id,
                     match_score=match_score,
                     match_reason=self._get_match_reasons(client, prop),
@@ -603,8 +605,8 @@ class ClientService:
     def restore_client(self, client_id: str, organization_id: str) -> Client:
         """Restore archived client"""
         client = self.db.query(Client).filter(
-            Client.id == uuid.UUID(client_id),
-            Client.organization_id == uuid.UUID(organization_id),
+            Client.id == as_uuid(client_id),
+            Client.organization_id == as_uuid(organization_id),
         ).first()
         
         if not client:
@@ -624,24 +626,24 @@ class ClientService:
     def get_client_stats(self, organization_id: str) -> Dict[str, Any]:
         """Get client statistics for organization"""
         total = self.db.query(Client).filter(
-            Client.organization_id == uuid.UUID(organization_id),
+            Client.organization_id == as_uuid(organization_id),
             Client.deleted_at.is_(None),
         ).count()
         
         buyers = self.db.query(Client).filter(
-            Client.organization_id == uuid.UUID(organization_id),
+            Client.organization_id == as_uuid(organization_id),
             Client.type.in_(["buyer", "both"]),
             Client.deleted_at.is_(None),
         ).count()
         
         sellers = self.db.query(Client).filter(
-            Client.organization_id == uuid.UUID(organization_id),
+            Client.organization_id == as_uuid(organization_id),
             Client.type.in_(["seller", "both"]),
             Client.deleted_at.is_(None),
         ).count()
         
         active = self.db.query(Client).filter(
-            Client.organization_id == uuid.UUID(organization_id),
+            Client.organization_id == as_uuid(organization_id),
             Client.status == "active",
             Client.deleted_at.is_(None),
         ).count()
@@ -649,7 +651,7 @@ class ClientService:
         # Clients with interactions in last 30 days
         thirty_days_ago = datetime.utcnow() - timedelta(days=30)
         active_recently = self.db.query(Client).filter(
-            Client.organization_id == uuid.UUID(organization_id),
+            Client.organization_id == as_uuid(organization_id),
             Client.last_interaction_at >= thirty_days_ago,
             Client.deleted_at.is_(None),
         ).count()
@@ -681,11 +683,11 @@ class ClientService:
     ):
         """Log audit trail entry"""
         audit_log = AuditLog(
-            organization_id=uuid.UUID(organization_id),
-            user_id=uuid.UUID(user_id) if user_id else None,
+            organization_id=as_uuid(organization_id),
+            user_id=as_uuid(user_id) if user_id else None,
             action=action,
             entity_type=entity_type,
-            entity_id=uuid.UUID(entity_id) if entity_id else None,
+            entity_id=as_uuid(entity_id) if entity_id else None,
             old_values=old_values,
             new_values=new_values,
         )

@@ -25,7 +25,8 @@ python-json-logger==2.0.7
 # Authentication & Security
 # ============================================================================
 python-jose[cryptography]==3.3.0  # JWT
-passlib[bcrypt]==1.7.4  # Password hashing
+passlib==1.7.4  # Password hashing
+argon2-cffi==23.1.0  # Argon2 backend used by utils_auth.py
 cryptography==41.0.7
 python-dotenv==1.0.0
 email-validator==2.0.0

@@ -694,7 +694,7 @@ def create_app() -> FastAPI:
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
     # return await attach_user_context(request, call_next)  # TODO: Fix HTTPCredentials import
-return await call_next(request)
+    return await call_next(request)
     # ========================================================================
     # API Routes
     # ========================================================================

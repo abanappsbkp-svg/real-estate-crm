@@ -4,7 +4,10 @@ Handles JWT verification and user context injection
 """
 
 from fastapi import Depends, HTTPException, status
-from fastapi.security import HTTPBearer, HTTPAuthCredentials
+   from fastapi.security import HTTPBearer
+   from starlette.authentication import HTTPCredentials
+
+
 from sqlalchemy.orm import Session
 from typing import Optional, Callable
 

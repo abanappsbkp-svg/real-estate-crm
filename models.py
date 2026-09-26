@@ -214,7 +214,7 @@ class Property(Base):
     organization = relationship("Organization", back_populates="properties")
     listing_agent = relationship("User", foreign_keys=[listing_agent_id], back_populates="created_properties")
     history = relationship("PropertyHistory", back_populates="property", cascade="all, delete-orphan")
-    deals = relationship("Deal", back_populates="property")
+    deals = relationship("Deal", back_populates="listing")
     matches = relationship("PropertyMatch", back_populates="property", cascade="all, delete-orphan")
     showings = relationship("Showing", back_populates="property", cascade="all, delete-orphan")
     interactions = relationship("ClientInteraction", back_populates="property")

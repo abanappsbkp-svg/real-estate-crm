@@ -10,7 +10,9 @@ from typing import Optional
 
 from models import User, UserRole
 from services_auth import AuthService, AuthenticationError
-from middleware_auth import (
+# from middleware_auth import (
+#     attach_user_context,
+# )
     get_current_user,
     get_optional_user,
     get_user_context,

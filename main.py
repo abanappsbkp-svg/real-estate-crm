@@ -39,8 +39,10 @@ engine = create_engine(
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
 # Create tables
-models.Base.metadata.create_all(bind=engine)
-
+try:
+    models.Base.metadata.create_all(bind=engine)
+except Exception as e:
+    print(f"Warning: Could not initialize database tables on startup: {e}")
 def get_db():
     """Dependency injection for database session"""
     db = SessionLocal()

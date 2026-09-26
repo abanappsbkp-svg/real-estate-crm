@@ -28,7 +28,7 @@ security = HTTPBearer(
 # ============================================================================
 
 async def get_current_user(
-    credentials: Optional[HTTPAuthCredentials] = Depends(security),
+    # credentials: Optional[HTTPAuthCredentials] = Depends(security),
     db: Session = Depends(get_db),
 ) -> User:
     """

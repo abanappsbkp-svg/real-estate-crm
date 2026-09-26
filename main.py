@@ -692,9 +692,7 @@ def create_app() -> FastAPI:
 
     # from middleware_auth import attach_user_context  # TODO: Fix HTTPCredentials import
 
-@app.middleware("http")
-async def auth_middleware(request: Request, call_next):
-    return await call_next(request)
+
     # ========================================================================
     # API Routes
     # ========================================================================
@@ -753,6 +751,10 @@ async def auth_middleware(request: Request, call_next):
 # Create app instance
 # ============================================================================
 app = create_app()
+
+@app.middleware("http")
+async def auth_middleware(request: Request, call_next):
+    return await call_next(request)
 
 if __name__ == "__main__":
     import uvicorn

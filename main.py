@@ -689,7 +689,7 @@ def create_app() -> FastAPI:
     # ========================================================================
     # Authentication Middleware
     # ========================================================================
-    from middleware.auth_middleware import attach_user_context
+    from middleware_auth import attach_user_context
     
     @app.middleware("http")
     async def auth_middleware(request: Request, call_next):
